@@ -1,0 +1,306 @@
+@import "tailwindcss";
+
+:root {
+  /* Touristic Kenya palette — forest lake, ivory light, amber sun */
+  --ink: #0f1c1a;
+  --ink-muted: #4a5c58;
+  --sand: #f7f2ea;
+  --sand-deep: #e8dcc8;
+  --lake: #0a3834;
+  --lake-bright: #178076;
+  --sun: #e0a41a;
+  --sun-soft: #f2c75a;
+  --surface: #fbf8f3;
+  --line: #d5cbbd;
+  --background: var(--surface);
+  --foreground: var(--ink);
+
+  --radius: 1rem;
+  --shadow-sm: 0 1px 2px rgba(15, 28, 26, 0.05);
+  --shadow-md: 0 8px 24px -10px rgba(15, 28, 26, 0.16);
+  --shadow-lg: 0 28px 52px -22px rgba(10, 56, 52, 0.38);
+
+  /* Role accents (overridden on dashboards) */
+  --role-accent: var(--lake);
+  --role-accent-soft: color-mix(in srgb, var(--lake) 12%, white);
+  --role-sidebar: color-mix(in srgb, white 92%, var(--sand));
+  --role-nav-fg: var(--ink);
+  --role-nav-muted: var(--ink-muted);
+  --role-nav-hover: color-mix(in srgb, var(--sand) 80%, white);
+  --role-nav-active: var(--role-accent);
+  --role-nav-active-fg: var(--sand);
+  --role-nav-border: var(--line);
+  --role-brand-mark: var(--lake);
+}
+
+/* Traveler — same forest lake teal as provider / admin desks */
+[data-role="tourist"] {
+  --lake: #0a3834;
+  --lake-bright: #178076;
+  --role-accent: #0a3834;
+  --role-accent-soft: #e8f4f2;
+  --role-sidebar: #062824;
+  --role-nav-fg: #f4faf8;
+  --role-nav-muted: #9bb8b3;
+  --role-nav-hover: rgba(255, 255, 255, 0.08);
+  --role-nav-active: #178076;
+  --role-nav-active-fg: #f7f2ea;
+  --role-nav-border: rgba(244, 250, 248, 0.12);
+  --role-brand-mark: #e0a41a;
+}
+
+/* Provider — forest lake desk (brand teal, not wood brown) */
+[data-role="provider"] {
+  --lake: #0a3834;
+  --lake-bright: #178076;
+  --role-accent: #0a3834;
+  --role-accent-soft: #e8f4f2;
+  --role-sidebar: #062824;
+  --role-nav-fg: #f4faf8;
+  --role-nav-muted: #9bb8b3;
+  --role-nav-hover: rgba(255, 255, 255, 0.08);
+  --role-nav-active: #178076;
+  --role-nav-active-fg: #f7f2ea;
+  --role-nav-border: rgba(244, 250, 248, 0.12);
+  --role-brand-mark: #e0a41a;
+}
+
+/* Admin — same forest lake teal as provider desk */
+[data-role="admin"] {
+  --lake: #0a3834;
+  --lake-bright: #178076;
+  --role-accent: #0a3834;
+  --role-accent-soft: #e8f4f2;
+  --role-sidebar: #062824;
+  --role-nav-fg: #f4faf8;
+  --role-nav-muted: #9bb8b3;
+  --role-nav-hover: rgba(255, 255, 255, 0.08);
+  --role-nav-active: #178076;
+  --role-nav-active-fg: #f7f2ea;
+  --role-nav-border: rgba(244, 250, 248, 0.12);
+  --role-brand-mark: #e0a41a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-sand: var(--sand);
+  --color-sand-deep: var(--sand-deep);
+  --color-lake: var(--lake);
+  --color-lake-bright: var(--lake-bright);
+  --color-sun: var(--sun);
+  --color-sun-soft: var(--sun-soft);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 70% 45% at 12% -10%, #f0d9a0 0%, transparent 52%),
+    radial-gradient(ellipse 50% 36% at 100% 0%, #e8d5b5 0%, transparent 48%),
+    var(--surface);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--lake-bright);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--sun) 40%, transparent);
+  color: var(--ink);
+}
+
+.card {
+  background: color-mix(in srgb, white 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px);
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--lake-bright) 45%, var(--line));
+}
+
+.dash-shell {
+  background: var(--role-accent-soft);
+}
+
+[data-role="admin"] .dash-shell {
+  background:
+    radial-gradient(
+      ellipse 70% 48% at 0% -10%,
+      color-mix(in srgb, var(--lake-bright) 14%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 55% 40% at 100% 100%,
+      color-mix(in srgb, var(--sun) 12%, transparent) 0%,
+      transparent 50%
+    ),
+    linear-gradient(165deg, #fbf9f5 0%, #f3f7f6 42%, #eef4f2 100%);
+}
+
+[data-role="tourist"] .dash-shell,
+[data-role="provider"] .dash-shell {
+  background:
+    radial-gradient(
+      ellipse 70% 48% at 0% -10%,
+      color-mix(in srgb, var(--lake-bright) 14%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 55% 40% at 100% 100%,
+      color-mix(in srgb, var(--sun) 12%, transparent) 0%,
+      transparent 50%
+    ),
+    linear-gradient(165deg, #fbf9f5 0%, #f3f7f6 42%, #eef4f2 100%);
+}
+
+.role-nav-link:hover:not([aria-current="page"]) {
+  background: var(--role-nav-hover);
+  color: var(--role-nav-fg);
+}
+
+.role-nav-link:hover:not([aria-current="page"]) svg {
+  color: var(--role-nav-fg);
+}
+
+/* Admin workspace cards — forest-tinted surfaces */
+[data-role="admin"] .dash-shell .admin-card,
+[data-role="admin"] .dash-shell [class*="bg-white/"] {
+  background-color: color-mix(in srgb, white 94%, #d8ebe8);
+  border-color: color-mix(in srgb, var(--lake) 10%, var(--line));
+  box-shadow: 0 1px 2px rgba(10, 56, 52, 0.05);
+}
+
+[data-role="admin"] .dash-shell h1 {
+  color: var(--lake);
+}
+
+/* Tighter page chrome so admin fits the display */
+[data-role="admin"] .dash-shell > div:not([aria-hidden]) {
+  padding-top: clamp(1rem, 2.2vh, 2rem);
+  padding-bottom: clamp(1rem, 2.2vh, 2rem);
+}
+
+[data-role="admin"] .dash-shell .px-4.py-10,
+[data-role="admin"] .dash-shell .px-4.py-12 {
+  padding-top: clamp(1rem, 2.5vh, 2rem);
+  padding-bottom: clamp(1.25rem, 3vh, 2.25rem);
+}
+
+/* Provider lodge surfaces */
+[data-role="provider"] .dash-shell .provider-card,
+[data-role="provider"] .dash-shell [class*="bg-white/"] {
+  background-color: color-mix(in srgb, white 94%, #d8ebe8);
+  border-color: color-mix(in srgb, var(--lake) 10%, var(--line));
+  box-shadow: 0 1px 3px rgba(10, 56, 52, 0.05);
+}
+
+[data-role="provider"] .dash-shell h1 {
+  color: var(--lake);
+}
+
+[data-role="tourist"] .dash-shell h1 {
+  color: var(--lake);
+}
+
+[data-role="tourist"] .dash-shell [class*="bg-white/"] {
+  background-color: color-mix(in srgb, white 94%, #d8ebe8);
+  border-color: color-mix(in srgb, var(--lake) 10%, var(--line));
+}
+
+[data-role="provider"] .provider-module {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, white 96%, #dceeea) 0%,
+      color-mix(in srgb, white 90%, #cfe6e1) 100%
+    );
+  border: 1px solid color-mix(in srgb, var(--lake-bright) 22%, var(--line));
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+[data-role="provider"] .provider-module:hover {
+  transform: translateY(-3px);
+  border-color: var(--lake-bright);
+  box-shadow: 0 12px 28px -16px rgba(10, 56, 52, 0.28);
+}
+
+.dash-panel {
+  background: color-mix(in srgb, white 94%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes provider-chart-draw {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.provider-chart-draw {
+  animation: provider-chart-draw 0.7s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .card,
+  .card-interactive:hover,
+  .animate-fade-up,
+  .provider-chart-draw {
+    transition: none;
+    animation: none;
+    transform: none;
+  }
+}

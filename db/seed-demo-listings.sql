@@ -1,0 +1,3 @@
+-- Deprecated: use seed-demo-full.sql instead (includes stays/eat/move + bookings + logins).
+-- Kept for reference. Prefer:
+--   db/seed-demo-full.sql

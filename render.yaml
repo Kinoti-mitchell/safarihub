@@ -1,0 +1,45 @@
+# Deploy on Render (same pattern as intern / TRace)
+# 1. Go to https://render.com → New → Blueprint → connect this repo
+# 2. Render creates the web service from this file
+# 3. After first deploy, set secrets in the service Environment tab
+#    (anything marked sync: false below)
+# 4. Set NEXT_PUBLIC_APP_URL to your live URL, e.g.
+#    https://safari-hub.onrender.com
+
+services:
+  - type: web
+    name: safari-hub
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_APP_URL
+        # Update after first deploy to your Render URL (or custom domain)
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: AUTH_URL
+        # Same as NEXT_PUBLIC_APP_URL once known
+        sync: false
+      - key: DATABASE_URL
+        # Supabase pooler URI (port 6543) — URL-encode special chars in password
+        sync: false
+      - key: DIRECT_URL
+        # Supabase session URI (port 5432)
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
