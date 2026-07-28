@@ -904,117 +904,77 @@ function RegisterForm() {
 
           {/* Step 1 — Role & business identity */}
           {asProvider && (
-            <div className={step === 1 ? "space-y-6" : "hidden"}>
+            <div className={step === 1 ? "space-y-8" : "hidden"}>
               <div>
                 <h2 className="font-display text-xl font-semibold text-lake">
-                  Who are you at this company?
+                  Tell us about the business
                 </h2>
                 <p className="mt-1 text-sm text-ink-muted">
-                  Pick the role that best matches you. Admins use this when
-                  reviewing your registration.
+                  Three quick answers — business name, how it&apos;s registered,
+                  and your role there.
                 </p>
               </div>
 
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  Your role *
+              {/* 1. Business name */}
+              <section className="space-y-2">
+                <p className="text-sm font-semibold text-ink">
+                  1. What is the business called?
                 </p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {REGISTRANT_ROLES.map((r) => {
-                    const selected = registrantRole === r.value;
+                <label className="block text-sm text-ink-muted">
+                  Business / venue name *
+                  <input
+                    name="businessName"
+                    required={step === 1}
+                    placeholder="e.g. Lake Naivasha Lodge"
+                    className={fieldClass}
+                  />
+                </label>
+              </section>
+
+              {/* 2. KYC type */}
+              <section className="space-y-2">
+                <p className="text-sm font-semibold text-ink">
+                  2. How is it registered?
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      {
+                        value: "INDIVIDUAL" as const,
+                        title: "Individual / sole trader",
+                        body: "Uses your national ID from the Account step",
+                      },
+                      {
+                        value: "COMPANY" as const,
+                        title: "Limited company",
+                        body: "Needs a company registration number (PVT-…)",
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const selected = kycType === opt.value;
                     return (
                       <button
-                        key={r.value}
+                        key={opt.value}
                         type="button"
-                        onClick={() => setRegistrantRole(r.value)}
-                        className={`rounded-xl border px-3.5 py-3 text-left transition ${
+                        onClick={() => setKycType(opt.value)}
+                        className={`rounded-xl border px-4 py-3.5 text-left transition ${
                           selected
-                            ? "border-lake bg-lake text-sand shadow-sm"
-                            : "border-line bg-white text-ink hover:border-lake-bright hover:bg-sand/40"
+                            ? "border-lake bg-lake/5 ring-2 ring-lake/25"
+                            : "border-line bg-white hover:border-lake-bright"
                         }`}
                       >
-                        <span className="block text-sm font-semibold">
-                          {r.label}
+                        <span className="block text-sm font-semibold text-ink">
+                          {opt.title}
                         </span>
-                        <span
-                          className={`mt-0.5 block text-xs ${
-                            selected ? "text-sand/80" : "text-ink-muted"
-                          }`}
-                        >
-                          {r.hint}
+                        <span className="mt-1 block text-xs text-ink-muted">
+                          {opt.body}
                         </span>
                       </button>
                     );
                   })}
                 </div>
-                <input
-                  type="hidden"
-                  name="registrantRole"
-                  value={registrantRole}
-                />
-              </div>
-
-              <div className="rounded-xl border border-line bg-sand/30 p-4 space-y-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                    Business identity
-                  </p>
-                  <label className="mt-2 block text-sm font-medium text-ink">
-                    Business / venue name *
-                    <input
-                      name="businessName"
-                      required={step === 1}
-                      placeholder="e.g. Lake Naivasha Lodge"
-                      className={fieldClass}
-                    />
-                  </label>
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-ink">
-                    How is the business registered? *
-                  </p>
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {(
-                      [
-                        {
-                          value: "INDIVIDUAL" as const,
-                          title: "Individual",
-                          body: "Sole trader — verified with your national ID",
-                        },
-                        {
-                          value: "COMPANY" as const,
-                          title: "Limited company",
-                          body: "Ltd / PVT — needs company registration number",
-                        },
-                      ] as const
-                    ).map((opt) => {
-                      const selected = kycType === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setKycType(opt.value)}
-                          className={`rounded-xl border px-3.5 py-3 text-left transition ${
-                            selected
-                              ? "border-lake bg-white ring-2 ring-lake/30"
-                              : "border-line bg-white hover:border-lake-bright"
-                          }`}
-                        >
-                          <span className="block text-sm font-semibold text-ink">
-                            {opt.title}
-                          </span>
-                          <span className="mt-0.5 block text-xs text-ink-muted">
-                            {opt.body}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 {kycType === "COMPANY" && (
-                  <label className="block text-sm font-medium text-ink">
+                  <label className="mt-2 block text-sm font-medium text-ink">
                     Company registration number *
                     <input
                       name="registrationNumber"
@@ -1024,13 +984,208 @@ function RegisterForm() {
                     />
                   </label>
                 )}
-                {kycType === "INDIVIDUAL" && (
-                  <p className="rounded-lg border border-line bg-white/70 px-3 py-2 text-xs text-ink-muted">
-                    Your national ID from the Account step is used to verify
-                    this individual business.
-                  </p>
-                )}
-              </div>
+              </section>
+
+              {/* 3. Your role — simplified primary choices */}
+              <section className="space-y-2">
+                <p className="text-sm font-semibold text-ink">
+                  3. Who are you at this company?
+                </p>
+                <p className="text-xs text-ink-muted">
+                  So admins know who submitted the registration.
+                </p>
+                <div className="mt-2 space-y-2">
+                  {(
+                    [
+                      {
+                        value: "OWNER" as const,
+                        label: "I'm the owner",
+                        hint: "I own or personally run this business",
+                      },
+                      {
+                        value: "DIRECTOR" as const,
+                        label: "I'm a company director",
+                        hint: "Registered director of the company",
+                      },
+                      {
+                        value: "MANAGER" as const,
+                        label: "I manage operations",
+                        hint: "Day-to-day manager or ops lead",
+                      },
+                      {
+                        value: "AGENT" as const,
+                        label: "I'm registering for someone else",
+                        hint: "Authorized agent acting for the owner",
+                      },
+                    ] as const
+                  ).map((r) => {
+                    const selected = registrantRole === r.value;
+                    return (
+                      <button
+                        key={r.value}
+                        type="button"
+                        onClick={() => setRegistrantRole(r.value)}
+                        className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                          selected
+                            ? "border-lake bg-lake text-sand"
+                            : "border-line bg-white text-ink hover:border-lake-bright"
+                        }`}
+                      >
+                        <span
+                          className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border ${
+                            selected
+                              ? "border-sand bg-sand"
+                              : "border-line bg-white"
+                          }`}
+                          aria-hidden
+                        >
+                          {selected && (
+                            <span className="size-1.5 rounded-full bg-lake" />
+                          )}
+                        </span>
+                        <span>
+                          <span className="block text-sm font-semibold">
+                            {r.label}
+                          </span>
+                          <span
+                            className={`mt-0.5 block text-xs ${
+                              selected ? "text-sand/80" : "text-ink-muted"
+                            }`}
+                          >
+                            {r.hint}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {/* Staff — expands secondary roles */}
+                  <div
+                    className={`rounded-xl border transition ${
+                      (
+                        [
+                          "ICT",
+                          "FRONT_DESK",
+                          "ACCOUNTANT",
+                          "MARKETING",
+                          "OTHER",
+                        ] as const
+                      ).includes(
+                        registrantRole as
+                          | "ICT"
+                          | "FRONT_DESK"
+                          | "ACCOUNTANT"
+                          | "MARKETING"
+                          | "OTHER",
+                      )
+                        ? "border-lake bg-lake/5"
+                        : "border-line bg-white"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          !(
+                            [
+                              "ICT",
+                              "FRONT_DESK",
+                              "ACCOUNTANT",
+                              "MARKETING",
+                              "OTHER",
+                            ] as string[]
+                          ).includes(registrantRole)
+                        ) {
+                          setRegistrantRole("FRONT_DESK");
+                        }
+                      }}
+                      className="flex w-full items-start gap-3 px-4 py-3 text-left"
+                    >
+                      <span
+                        className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border ${
+                          (
+                            [
+                              "ICT",
+                              "FRONT_DESK",
+                              "ACCOUNTANT",
+                              "MARKETING",
+                              "OTHER",
+                            ] as string[]
+                          ).includes(registrantRole)
+                            ? "border-lake bg-lake"
+                            : "border-line bg-white"
+                        }`}
+                        aria-hidden
+                      >
+                        {(
+                          [
+                            "ICT",
+                            "FRONT_DESK",
+                            "ACCOUNTANT",
+                            "MARKETING",
+                            "OTHER",
+                          ] as string[]
+                        ).includes(registrantRole) && (
+                          <span className="size-1.5 rounded-full bg-sand" />
+                        )}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-ink">
+                          I work here (staff)
+                        </span>
+                        <span className="mt-0.5 block text-xs text-ink-muted">
+                          Front desk, ICT, finance, marketing, or other
+                        </span>
+                      </span>
+                    </button>
+                    {(
+                      [
+                        "ICT",
+                        "FRONT_DESK",
+                        "ACCOUNTANT",
+                        "MARKETING",
+                        "OTHER",
+                      ] as string[]
+                    ).includes(registrantRole) && (
+                      <div className="flex flex-wrap gap-2 border-t border-line/60 px-4 py-3">
+                        {(
+                          [
+                            { value: "FRONT_DESK" as const, label: "Front desk" },
+                            { value: "ICT" as const, label: "ICT / systems" },
+                            {
+                              value: "ACCOUNTANT" as const,
+                              label: "Finance",
+                            },
+                            {
+                              value: "MARKETING" as const,
+                              label: "Marketing",
+                            },
+                            { value: "OTHER" as const, label: "Other staff" },
+                          ] as const
+                        ).map((s) => (
+                          <button
+                            key={s.value}
+                            type="button"
+                            onClick={() => setRegistrantRole(s.value)}
+                            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                              registrantRole === s.value
+                                ? "border-lake bg-lake text-sand"
+                                : "border-line bg-white text-ink hover:border-lake-bright"
+                            }`}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="hidden"
+                  name="registrantRole"
+                  value={registrantRole}
+                />
+              </section>
             </div>
           )}
 
