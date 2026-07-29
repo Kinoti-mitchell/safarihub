@@ -1,17 +1,18 @@
 # Deploy on Render (same pattern as intern / TRace)
-# 1. Go to https://render.com → New → Blueprint → connect this repo
+# 1. Go to https://dashboard.render.com/blueprints/new
+#    → connect https://github.com/Kinoti-mitchell/safarihub
 # 2. Render creates the web service from this file
-# 3. After first deploy, set secrets in the service Environment tab
-#    (anything marked sync: false below)
-# 4. Set NEXT_PUBLIC_APP_URL to your live URL, e.g.
-#    https://safari-hub.onrender.com
+# 3. Fill secrets marked sync: false (copy from local .env)
+# 4. After first deploy, set NEXT_PUBLIC_APP_URL and AUTH_URL to:
+#    https://safari-hub.onrender.com  (or your actual Render URL)
 
 services:
   - type: web
     name: safari-hub
     runtime: node
     plan: free
-    buildCommand: npm ci && npx prisma generate && npm run build
+    region: oregon
+    buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /
     envVars:
@@ -20,7 +21,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_APP_URL
-        # Update after first deploy to your Render URL (or custom domain)
+        # Set after first deploy, e.g. https://safari-hub.onrender.com
         sync: false
       - key: AUTH_SECRET
         generateValue: true
@@ -28,7 +29,7 @@ services:
         # Same as NEXT_PUBLIC_APP_URL once known
         sync: false
       - key: DATABASE_URL
-        # Supabase pooler URI (port 6543) — URL-encode special chars in password
+        # Supabase pooler URI (port 6543)
         sync: false
       - key: DIRECT_URL
         # Supabase session URI (port 5432)
@@ -42,4 +43,8 @@ services:
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
         sync: false
