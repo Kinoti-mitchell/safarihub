@@ -17,26 +17,28 @@ export type HeroSlide = {
   ratingCount?: number;
 };
 
+export type HeroBrand = {
+  name: string;
+  logoUrl?: string;
+  headline: string;
+  subheadline?: string;
+};
+
 const BRAND_FALLBACKS: HeroSlide[] = [
   {
     key: "brand-elephants",
     src: "/hero/elephants-savanna.jpg",
-    alt: "African elephants walking across a grassy savanna",
+    alt: "Open landscape at golden hour",
   },
   {
     key: "brand-elephant-close",
     src: "/hero/elephant-close.jpg",
-    alt: "Close-up of an African elephant on safari",
+    alt: "Wildlife in the wild",
   },
   {
     key: "brand-herd",
     src: "/hero/elephant-herd.jpg",
-    alt: "Wildlife crossing a dirt road on safari",
-  },
-  {
-    key: "brand-kenya",
-    src: "/hero/kenya-safari.jpg",
-    alt: "Kenya safari landscape at golden hour",
+    alt: "Animals crossing a dirt road",
   },
 ];
 
@@ -66,8 +68,10 @@ function buildSlides(listingSlides: HeroSlide[]): HeroSlide[] {
 
 export function HomeHero({
   slides: listingSlides = [],
+  brand,
 }: {
   slides?: HeroSlide[];
+  brand?: HeroBrand | null;
 }) {
   const slides = buildSlides(listingSlides);
   const [index, setIndex] = useState(0);
@@ -90,7 +94,8 @@ export function HomeHero({
   }, [reduceMotion, slides.length]);
 
   const active = slides[index] ?? slides[0];
-  const meta = active?.title
+  const showListing = Boolean(active?.title);
+  const meta = showListing
     ? [
         active.place,
         active.ratingAvg != null && active.ratingCount
@@ -127,7 +132,7 @@ export function HomeHero({
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col justify-end px-4 pb-14 pt-24 sm:px-6 sm:pb-16">
-        {active?.title ? (
+        {showListing ? (
           <div className="animate-fade-up max-w-2xl">
             <div className="flex items-start gap-3">
               {active.logoUrl ? (
@@ -176,6 +181,40 @@ export function HomeHero({
                 </Link>
               </div>
             ) : null}
+          </div>
+        ) : brand ? (
+          <div className="animate-fade-up max-w-2xl">
+            <div className="flex items-start gap-3">
+              {brand.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={brand.logoUrl}
+                  alt=""
+                  className="mt-1 size-14 shrink-0 rounded-lg bg-sand/15 object-contain p-1.5"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sand/70">
+                  {brand.name}
+                </p>
+                <h1 className="mt-2 font-display text-4xl font-semibold leading-[1.05] tracking-tight text-sand sm:text-5xl md:text-6xl">
+                  {brand.headline}
+                </h1>
+              </div>
+            </div>
+            {brand.subheadline ? (
+              <p className="mt-4 max-w-xl text-base leading-relaxed text-sand/90 sm:text-lg">
+                {brand.subheadline}
+              </p>
+            ) : null}
+            <div className="mt-6">
+              <Link
+                href="/browse"
+                className="inline-flex rounded-lg bg-sun px-5 py-3 text-sm font-semibold text-ink shadow-md transition hover:-translate-y-0.5 hover:brightness-110"
+              >
+                Browse listings
+              </Link>
+            </div>
           </div>
         ) : null}
 

@@ -242,7 +242,7 @@ export function ListingCard({ listing }: { listing: CatalogListing }) {
                 "linear-gradient(180deg, rgba(8,45,42,0.2), rgba(8,45,42,0.78)), url('/hero/elephants-savanna.jpg')",
             }}
           >
-            <span className="text-sm font-medium text-sand">Safari Hub</span>
+            <span className="text-sm font-medium text-sand">Photo coming soon</span>
           </div>
         )}
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
@@ -339,13 +339,14 @@ export async function CatalogPage({
     getLiveCounties(),
     getPlatformSettings(),
   ]);
-  const marketName = String(settings["general.marketName"] || "Kenya");
+  const marketName = String(settings["general.marketName"] || "").trim();
+  const browseLabel = marketName ? `Browse ${marketName}` : "Browse";
 
-  const heading = title || activeMeta?.label || `Browse ${marketName}`;
+  const heading = title || activeMeta?.label || browseLabel;
   const meta = activeMeta ?? {
     slug: "all",
     category: "STAY" as const,
-    label: `Browse ${marketName}`,
+    label: browseLabel,
     eyebrow: "One marketplace",
     blurb:
       "Stays, dining, transfers, tours and venues — filter by what you need.",

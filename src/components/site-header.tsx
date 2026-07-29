@@ -14,9 +14,19 @@ export async function SiteHeader() {
   const eventsEnabled = boolSetting(settings, "flags.eventsEnabled");
   const packagesEnabled = boolSetting(settings, "flags.packagesEnabled");
   const logoUrl = String(settings["branding.logoUrl"] || "");
-  const logoText = String(settings["branding.logoText"] || "SH");
-  const platformName = String(settings["general.platformName"] || "Safari Hub");
-  const marketName = String(settings["general.marketName"] || "Kenya");
+  const logoText = String(settings["branding.logoText"] || "");
+  const platformName =
+    String(settings["general.platformName"] || "").trim() || "Platform";
+  const marketName = String(settings["general.marketName"] || "").trim();
+  const initials =
+    logoText.trim() ||
+    platformName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() || "")
+      .join("") ||
+    "·";
   const dash = session?.user
     ? dashboardPathForRole(session.user.role)
     : "/login";
@@ -39,7 +49,7 @@ export async function SiteHeader() {
               aria-hidden
               className="grid size-8 shrink-0 place-items-center rounded-lg bg-lake text-sm font-bold text-sand shadow-sm transition-transform group-hover:-rotate-6"
             >
-              {logoText.slice(0, 2)}
+              {initials.slice(0, 2)}
             </span>
           )}
           <span className="flex min-w-0 items-baseline gap-2">

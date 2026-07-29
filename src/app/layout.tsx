@@ -21,8 +21,9 @@ const sans = Outfit({
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getPlatformSettings();
-  const name = String(settings["general.platformName"] || "Safari Hub");
-  const market = String(settings["general.marketName"] || "Kenya");
+  const name =
+    String(settings["general.platformName"] || "").trim() || "Platform";
+  const market = String(settings["general.marketName"] || "").trim();
   const about = String(settings["legal.about"] || "").trim();
   return {
     title: {
@@ -31,7 +32,9 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description:
       about ||
-      `Book stays, safari tours, dining and travel experiences across ${market}.`,
+      (market
+        ? `Book stays, dining, transport and experiences across ${market}.`
+        : `Book stays, dining, transport and experiences on ${name}.`),
     applicationName: name,
     manifest: "/manifest.webmanifest",
     appleWebApp: {

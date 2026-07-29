@@ -9,6 +9,8 @@ import {
 import { brandFromSettings } from "@/lib/branding";
 import { publicListingPath } from "@/lib/listing-paths";
 import { amenityLabel } from "@/lib/amenities";
+import { boolSetting, getPlatformSettings } from "@/lib/settings";
+import { db } from "@/lib/supabase";
 import Link from "next/link";
 
 function toHeroSlide(
@@ -45,10 +47,31 @@ function toHeroSlide(
 }
 
 export default async function HomePage() {
-  const [featured, brand] = await Promise.all([
+  const [featured, brand, settings, countiesRes] = await Promise.all([
     getFeaturedListings(6),
     brandFromSettings(),
+    getPlatformSettings(),
+    db
+      .from("County")
+      .select("name, slug")
+      .eq("isLive", true)
+      .order("name", { ascending: true })
+      .limit(8),
   ]);
+
+  const liveDestinations = (countiesRes.data ?? []) as Array<{
+    name: string;
+    slug: string;
+  }>;
+
+  const acceptMpesa = boolSetting(settings, "payments.mpesaEnabled");
+  const acceptCard = boolSetting(settings, "payments.cardEnabled");
+  const acceptCash = boolSetting(settings, "payments.cashEnabled");
+  const paymentBits = [
+    acceptMpesa ? "M-Pesa" : null,
+    acceptCard ? "Card" : null,
+    acceptCash ? "Cash on arrival" : null,
+  ].filter(Boolean) as string[];
 
   let heroSlides = featured
     .map((l) => toHeroSlide(l))
@@ -67,9 +90,24 @@ export default async function HomePage() {
     ];
   }
 
+  const marketLine = brand.marketName
+    ? `across ${brand.marketName}`
+    : "in one marketplace";
+  const defaultSub =
+    brand.heroSubheadline ||
+    `Stay, eat, move, explore and meet — hospitality ${marketLine}.`;
+
   return (
     <div>
-      <HomeHero slides={heroSlides} />
+      <HomeHero
+        slides={heroSlides}
+        brand={{
+          name: brand.name,
+          logoUrl: brand.logoUrl || undefined,
+          headline: brand.heroHeadline,
+          subheadline: defaultSub,
+        }}
+      />
 
       <section className="border-b border-line/60 bg-white/70">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
@@ -89,7 +127,7 @@ export default async function HomePage() {
           </h2>
           <p className="mt-2 text-ink-muted">
             Stay, eat, move, explore and meet — the same marketplace operators
-            use to run hospitality across {brand.marketName}.
+            use to run hospitality {marketLine}.
           </p>
         </div>
         <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/70 sm:grid-cols-2 lg:grid-cols-5">
@@ -115,43 +153,39 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-b border-line/60 bg-white/50">
-        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-                Plan your trip
-              </p>
-              <h2 className="mt-1 font-display text-2xl font-semibold text-lake sm:text-3xl">
-                Destinations
-              </h2>
-            </div>
-            <Link
-              href="/destinations"
-              className="text-sm font-semibold text-lake-bright hover:text-lake"
-            >
-              All destinations →
-            </Link>
-          </div>
-          <div className="mt-6 flex flex-wrap gap-3">
-            {[
-              { href: "/destinations/maasai-mara", label: "Maasai Mara" },
-              { href: "/destinations/diani-south-coast", label: "Diani" },
-              { href: "/destinations/nairobi", label: "Nairobi" },
-              { href: "/destinations/nakuru", label: "Nakuru" },
-              { href: "/destinations/lamu", label: "Lamu" },
-            ].map((d) => (
+      {liveDestinations.length > 0 && (
+        <section className="border-b border-line/60 bg-white/50">
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+                  Plan your trip
+                </p>
+                <h2 className="mt-1 font-display text-2xl font-semibold text-lake sm:text-3xl">
+                  Destinations
+                </h2>
+              </div>
               <Link
-                key={d.href}
-                href={d.href}
-                className="rounded-full border border-line bg-white/80 px-4 py-2 text-sm font-medium text-ink transition hover:border-lake-bright hover:text-lake"
+                href="/destinations"
+                className="text-sm font-semibold text-lake-bright hover:text-lake"
               >
-                {d.label}
+                All destinations →
               </Link>
-            ))}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              {liveDestinations.map((d) => (
+                <Link
+                  key={d.slug}
+                  href={`/browse?county=${encodeURIComponent(d.slug)}`}
+                  className="rounded-full border border-line bg-white/80 px-4 py-2 text-sm font-medium text-ink transition hover:border-lake-bright hover:text-lake"
+                >
+                  {d.name}
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {featured.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
@@ -161,7 +195,9 @@ export default async function HomePage() {
                 Curated
               </p>
               <h2 className="mt-1 font-display text-3xl font-semibold text-lake sm:text-4xl">
-                Featured across {brand.marketName}
+                {brand.marketName
+                  ? `Featured across ${brand.marketName}`
+                  : `Featured on ${brand.name}`}
               </h2>
               <p className="mt-2 text-ink-muted">
                 Hand-picked stays, dining, transport and experiences — not
@@ -185,15 +221,17 @@ export default async function HomePage() {
 
       <section className="border-y border-line/50 bg-white/40">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-6 text-sm text-ink-muted sm:px-6">
+          {paymentBits.length > 0 && (
+            <p>
+              <span className="font-semibold text-ink">Pay your way</span>
+              <span className="mx-2 text-line">·</span>
+              {paymentBits.join(", ")}
+            </p>
+          )}
           <p>
-            <span className="font-semibold text-ink">M-Pesa native</span>
+            <span className="font-semibold text-ink">Verified operators</span>
             <span className="mx-2 text-line">·</span>
-            Card &amp; cash on arrival
-          </p>
-          <p>
-            <span className="font-semibold text-ink">Locally built</span>
-            <span className="mx-2 text-line">·</span>
-            Verified operators
+            Reviewed before going live
           </p>
           <p>
             <span className="font-semibold text-ink">PWA</span>
@@ -219,7 +257,7 @@ export default async function HomePage() {
                     Discover
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">
-                    Browse verified stays and experiences county by county.
+                    Browse verified stays and experiences by destination.
                   </p>
                 </div>
               </li>
@@ -232,8 +270,10 @@ export default async function HomePage() {
                     Book &amp; pay
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">
-                    Reserve instantly or on request. Pay with M-Pesa, card, or
-                    cash when you arrive.
+                    Reserve instantly or on request
+                    {paymentBits.length
+                      ? `. Pay with ${paymentBits.join(", ").toLowerCase()}.`
+                      : "."}
                   </p>
                 </div>
               </li>
@@ -243,7 +283,9 @@ export default async function HomePage() {
                 </span>
                 <div>
                   <p className="font-display text-lg font-semibold text-ink">
-                    Enjoy {brand.marketName}
+                    {brand.marketName
+                      ? `Enjoy ${brand.marketName}`
+                      : `Enjoy your trip`}
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">
                     Turn up and enjoy — loyalty points on every trip.
@@ -257,15 +299,23 @@ export default async function HomePage() {
               aria-hidden
               className="absolute -right-12 -top-12 size-40 rounded-full bg-sun/20 blur-2xl"
             />
+            {brand.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={brand.logoUrl}
+                alt=""
+                className="relative mb-4 h-10 w-auto object-contain opacity-90"
+              />
+            ) : null}
             <p className="relative text-xs font-semibold uppercase tracking-[0.18em] text-sand/60">
               For operators
             </p>
             <h3 className="relative font-display mt-3 text-2xl font-semibold text-sand sm:text-3xl">
-              Run your hospitality business
+              Run your hospitality business on {brand.name}
             </h3>
             <p className="relative mt-3 text-sm leading-relaxed text-sand/80">
-              Listings, bookings, inbox and M-Pesa payouts — tools for hotels,
-              venues, tours and transfers, not just a storefront.
+              Listings, bookings, inbox and payouts — tools for hotels, venues,
+              tours and transfers, not just a storefront.
             </p>
             <Link
               href="/register?role=provider"

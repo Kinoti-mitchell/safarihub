@@ -6,35 +6,29 @@ import { CATEGORIES } from "@/lib/categories";
 
 type County = { slug: string; name: string };
 
-export function HomeSearch({ marketName = "Kenya" }: { marketName?: string }) {
+export function HomeSearch({ marketName = "" }: { marketName?: string }) {
   const router = useRouter();
   const [counties, setCounties] = useState<County[]>([]);
   const [category, setCategory] = useState("");
 
   useEffect(() => {
-    void fetch("/api/locations")
+    void fetch("/api/locations?live=1")
       .then((r) => r.json())
-      .then(async (d) => {
-        const kenya = (d.countries || []).find(
-          (c: { code?: string; slug?: string }) =>
-            c.code === "KE" || c.slug === "kenya",
-        );
-        if (!kenya) return;
-        const res = await fetch(`/api/locations?countryId=${kenya.id}`);
-        const body = await res.json();
+      .then((body) => {
         setCounties(
-          (body.counties || [])
-            .filter((c: { isLive?: boolean }) => c.isLive !== false)
-            .map((c: { slug: string; name: string }) => ({
-              slug: c.slug,
-              name: c.name,
-            })),
+          (body.counties || []).map((c: { slug: string; name: string }) => ({
+            slug: c.slug,
+            name: c.name,
+          })),
         );
       })
       .catch(() => undefined);
   }, []);
 
   const showGuests = !category || category === "stays" || category === "meet";
+  const anywhereLabel = marketName.trim()
+    ? `Anywhere in ${marketName}`
+    : "Anywhere";
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -71,7 +65,7 @@ export function HomeSearch({ marketName = "Kenya" }: { marketName?: string }) {
           name="county"
           className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-lake-bright"
         >
-          <option value="">Anywhere in {marketName}</option>
+          <option value="">{anywhereLabel}</option>
           {counties.map((c) => (
             <option key={c.slug} value={c.slug}>
               {c.name}

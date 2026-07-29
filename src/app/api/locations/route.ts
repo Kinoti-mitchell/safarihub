@@ -28,6 +28,16 @@ export async function GET(request: Request) {
       return jsonOk({ counties });
     }
 
+    if (searchParams.get("live") === "1") {
+      const { data: counties, error } = await db
+        .from("County")
+        .select("id, name, slug, isLive, countryId")
+        .eq("isLive", true)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return jsonOk({ counties: counties ?? [] });
+    }
+
     const { data: countries, error } = await db
       .from("Country")
       .select("*")
