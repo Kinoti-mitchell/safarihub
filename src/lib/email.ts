@@ -1,5 +1,6 @@
 import dns from "node:dns";
 import nodemailer from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { getPlatformSettings, type SettingValue } from "@/lib/settings";
 
 export type EmailMessage = {
@@ -125,7 +126,7 @@ async function sendViaSmtp(creds: SmtpCreds, msg: EmailMessage, recipients: stri
         connectionTimeout: 12_000,
         greetingTimeout: 12_000,
         socketTimeout: 20_000,
-      });
+      } as SMTPTransport.Options);
 
       await transporter.sendMail({
         from,
