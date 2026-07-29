@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { AdminProviderSubmission } from "@/components/admin-provider-submission";
 
 type Member = {
   id: string;
@@ -99,8 +100,20 @@ type ProviderDetail = {
   kraPinDocUrl?: string | null;
   registrationCertUrl?: string | null;
   businessPermitUrl?: string | null;
+  selfieDocUrl?: string | null;
+  mpesaTillOrPaybill?: string | null;
+  businessPermitExpiresAt?: string | null;
+  traLicenceExpiresAt?: string | null;
+  termsAcceptedAt?: string | null;
+  privacyAcceptedAt?: string | null;
+  phoneVerifiedAt?: string | null;
+  emailVerifiedAt?: string | null;
+  rejectionReason?: string | null;
+  amenities?: string[] | null;
   countyId?: string | null;
   townId?: string | null;
+  countyName?: string | null;
+  townName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -170,6 +183,8 @@ export default function AdminProviderDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromPending = searchParams.get("from") === "pending";
 
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -203,7 +218,11 @@ export default function AdminProviderDetailPage() {
     void load();
   }, [load]);
 
-  async function patch(body: Record<string, unknown>, success: string) {
+  async function patch(
+    body: Record<string, unknown>,
+    success: string,
+    opts?: { redirectPending?: boolean },
+  ) {
     setBusy(true);
     try {
       const res = await fetch(`/api/admin/providers/${id}`, {
@@ -217,6 +236,10 @@ export default function AdminProviderDetailPage() {
         return;
       }
       pushToast(success, "success");
+      if (opts?.redirectPending && fromPending) {
+        router.push("/admin/approvals");
+        return;
+      }
       await load();
     } catch {
       pushToast("Network error", "error");
@@ -268,10 +291,12 @@ export default function AdminProviderDetailPage() {
 
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={() =>
+          fromPending ? router.push("/admin/approvals") : router.back()
+        }
         className="text-sm font-medium text-lake-bright hover:text-lake"
       >
-        ← Back
+        {fromPending ? "← Back to pending approvals" : "← Back"}
       </button>
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
@@ -304,88 +329,66 @@ export default function AdminProviderDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1 text-sm text-ink-muted">
-            Commission
-            <input
-              type="number"
-              min={0}
-              max={50}
-              value={rate}
-              onChange={(e) => setRate(Number(e.target.value))}
-              className="w-16 rounded-md border border-line px-2 py-1 text-sm"
-            />
-            %
-          </label>
-          {!p.isApproved && (
+        {p.isApproved && (
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1 text-sm text-ink-muted">
+              Commission
+              <input
+                type="number"
+                min={0}
+                max={50}
+                value={rate}
+                onChange={(e) => setRate(Number(e.target.value))}
+                className="w-16 rounded-md border border-line px-2 py-1 text-sm"
+              />
+              %
+            </label>
             <button
               type="button"
               disabled={busy}
               onClick={() =>
-                void patch(
-                  {
-                    isApproved: true,
-                    commissionRate: rate,
-                    kycStatus: "VERIFIED",
-                  },
-                  `${p.name} approved — confirmation sent`,
-                )
-              }
-              className="rounded-md bg-lake px-4 py-2 text-sm font-semibold text-sand disabled:opacity-50"
-            >
-              {busy ? "Working…" : "Approve & notify"}
-            </button>
-          )}
-          {p.isApproved && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void patch(
-                  { commissionRate: rate },
-                  "Commission updated",
-                )
+                void patch({ commissionRate: rate }, "Commission updated")
               }
               className="rounded-md border border-line px-3 py-2 text-sm disabled:opacity-50"
             >
               Save commission
             </button>
-          )}
-          {p.kycStatus !== "VERIFIED" && (
+            {p.kycStatus !== "VERIFIED" && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void patch({ kycStatus: "VERIFIED" }, "KYC verified")
+                }
+                className="rounded-md border border-line px-3 py-2 text-sm disabled:opacity-50"
+              >
+                Verify KYC
+              </button>
+            )}
             <button
               type="button"
               disabled={busy}
-              onClick={() =>
-                void patch({ kycStatus: "VERIFIED" }, "KYC verified")
-              }
-              className="rounded-md border border-line px-3 py-2 text-sm disabled:opacity-50"
+              onClick={() => {
+                const reason = window.prompt(
+                  "Rejection reason (shown to the provider):",
+                  "Documents incomplete or unclear — please resubmit",
+                );
+                if (reason == null) return;
+                void patch(
+                  {
+                    isApproved: false,
+                    kycStatus: "REJECTED",
+                    rejectionReason: reason.trim() || "Documents incomplete",
+                  },
+                  "Provider rejected",
+                );
+              }}
+              className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 disabled:opacity-50"
             >
-              Verify KYC
+              Suspend / reject
             </button>
-          )}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              const reason = window.prompt(
-                "Rejection reason (shown to the provider):",
-                "Documents incomplete or unclear — please resubmit",
-              );
-              if (reason == null) return;
-              void patch(
-                {
-                  isApproved: false,
-                  kycStatus: "REJECTED",
-                  rejectionReason: reason.trim() || "Documents incomplete",
-                },
-                "Provider rejected",
-              );
-            }}
-            className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-700 disabled:opacity-50"
-          >
-            Reject
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-5">
@@ -466,272 +469,125 @@ export default function AdminProviderDetailPage() {
         </section>
       )}
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <section className="admin-card rounded-xl p-5">
-          <h2 className="font-display text-lg font-semibold">
-            Signup details
-          </h2>
-          <p className="mt-1 text-xs text-ink-muted">
-            What the provider submitted when they registered — enough to
-            approve or reject.
-          </p>
-          <dl className="mt-3 space-y-2 text-sm">
-            <Row label="Business name" value={p.name} />
-            <Row label="Email" value={p.email || "—"} />
-            <Row label="Phone" value={p.phone || "—"} />
-            <Row
-              label="Registered by"
-              value={(p.registrantRole || "—").replace(/_/g, " ")}
-            />
-            <Row
-              label="KYC type"
-              value={(p.kycType || "INDIVIDUAL").toLowerCase()}
-            />
-            <Row
-              label={
-                p.kycType === "COMPANY" || p.registrationNumber
-                  ? "Company registration"
-                  : "National ID"
-              }
-              value={
-                p.kycType === "COMPANY" || p.registrationNumber
-                  ? p.registrationNumber || "—"
-                  : p.idNumber || "—"
-              }
-            />
-            <Row
-              label="KYC document"
-              value={
-                p.kycDocUrl ? (
-                  <a
-                    href={p.kycDocUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-lake-bright underline"
-                  >
-                    Open document
-                  </a>
-                ) : (
-                  "Not uploaded yet"
-                )
-              }
-            />
-            <Row
-              label="Owner ID scan"
-              value={
-                p.ownerIdDocUrl ? (
-                  <a
-                    href={p.ownerIdDocUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-lake-bright underline"
-                  >
-                    Open owner ID
-                  </a>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <Row
-              label="KRA PIN document"
-              value={
-                p.kraPinDocUrl ? (
-                  <a
-                    href={p.kraPinDocUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-lake-bright underline"
-                  >
-                    Open KRA PIN doc
-                  </a>
-                ) : (
-                  "—"
-                )
+      {(() => {
+        const ownerMember = data.members.find((m) => m.role === "OWNER") ?? data.members[0];
+        const owner = ownerMember?.user
+          ? {
+              name: ownerMember.user.name,
+              email: ownerMember.user.email,
+              phone: ownerMember.user.phone,
+            }
+          : null;
+        return (
+          <section className="admin-card mt-6 rounded-xl p-5">
+            <AdminProviderSubmission
+              business={p}
+              owner={owner}
+              actions={
+                !p.isApproved ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-sm text-ink">
+                      Commission
+                      <input
+                        type="number"
+                        min={0}
+                        max={50}
+                        value={rate}
+                        onChange={(e) => setRate(Number(e.target.value))}
+                        className="w-16 rounded-md border border-line bg-white px-2 py-1.5 text-sm"
+                      />
+                      %
+                    </label>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void patch(
+                          {
+                            isApproved: true,
+                            commissionRate: rate,
+                            kycStatus: "VERIFIED",
+                          },
+                          `${p.name} approved — confirmation sent`,
+                          { redirectPending: true },
+                        )
+                      }
+                      className="rounded-md bg-lake px-4 py-2 text-sm font-semibold text-sand disabled:opacity-50"
+                    >
+                      {busy ? "Working…" : "Approve & notify"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        const reason = window.prompt(
+                          "Decline reason (shown to the provider):",
+                          "Documents incomplete or unclear — please resubmit",
+                        );
+                        if (reason == null) return;
+                        void patch(
+                          {
+                            isApproved: false,
+                            kycStatus: "REJECTED",
+                            rejectionReason:
+                              reason.trim() || "Documents incomplete",
+                          },
+                          "Provider declined",
+                          { redirectPending: true },
+                        );
+                      }}
+                      className="rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                ) : undefined
               }
             />
-            <Row
-              label="Certificate of incorporation"
-              value={
-                p.registrationCertUrl ? (
-                  <a
-                    href={p.registrationCertUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-lake-bright underline"
-                  >
-                    Open certificate
-                  </a>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <Row
-              label="Business permit"
-              value={
-                p.businessPermitUrl ? (
-                  <a
-                    href={p.businessPermitUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-lake-bright underline"
-                  >
-                    Open permit
-                  </a>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <Row
-              label="Company email"
-              value={p.companyEmail || p.email || "—"}
-            />
-            <Row label="KRA PIN" value={p.kraPin || "—"} />
-            <Row
-              label="Business type"
-              value={(p.businessType || "—").replace(/_/g, " ")}
-            />
-            <Row label="Postal address" value={p.postalAddress || "—"} />
-            <Row
-              label="Hours"
-              value={
-                p.operatingDays
-                  ? `${p.operatingDays}${
-                      p.opensAt && p.closesAt
-                        ? ` · ${p.opensAt}–${p.closesAt}`
-                        : ""
-                    }`
-                  : "—"
-              }
-            />
-            <Row label="Established" value={p.establishedDate || "—"} />
-            <Row
-              label="Geolocation"
-              value={
-                p.latitude != null && p.longitude != null
-                  ? `${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`
-                  : "—"
-              }
-            />
-            <Row
-              label="Website"
-              value={
-                p.website ? (
-                  <a
-                    href={p.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-lake-bright underline"
-                  >
-                    {p.website}
-                  </a>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <Row
-              label="Directors"
-              value={
-                Array.isArray(p.directors) && p.directors.length > 0 ? (
-                  <ul className="space-y-1">
-                    {p.directors.map((d, i) => (
-                      <li key={`${d.name}-${i}`}>
-                        {d.name}
-                        {d.role ? ` · ${d.role}` : ""}
-                        {d.idNumber ? ` · ID ${d.idNumber}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <Row
-              label="Other documents"
-              value={
-                Array.isArray(p.otherDocsUrls) && p.otherDocsUrls.length > 0 ? (
-                  <span className="flex flex-wrap gap-2">
-                    {p.otherDocsUrls.map((url, i) => (
-                      <a
-                        key={`${url}-${i}`}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-lake-bright underline"
-                      >
-                        Doc {i + 1}
-                      </a>
-                    ))}
-                  </span>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            {p.description && (
-              <div>
-                <dt className="text-xs uppercase text-ink-muted">About</dt>
-                <dd className="mt-1 whitespace-pre-wrap text-ink">
-                  {p.description}
-                </dd>
-              </div>
-            )}
-          </dl>
-
-          <div className="mt-5 border-t border-line pt-4">
-            <h3 className="text-sm font-semibold text-ink">
-              After approval (ops)
-            </h3>
-            <p className="mt-1 text-xs text-ink-muted">
-              Payout and eTIMS settings the provider can complete once approved.
-            </p>
-            <dl className="mt-2 space-y-2 text-sm text-ink-muted">
-              <Row
-                label="Payout phone"
-                value={p.payoutPhone || "— pending"}
-              />
-              <Row
-                label="eTIMS"
-                value={p.etimsEnabled ? "Enabled" : "Off (default)"}
-              />
-            </dl>
-          </div>
-
-          <div className="mt-5 border-t border-line pt-4">
-            <h3 className="text-sm font-semibold text-ink">Public storefront</h3>
-            <p className="mt-1 text-xs text-ink-muted">
-              Their public business page on Safari Hub (
-              <code className="text-[0.7rem]">/providers/…</code>
-              ), where travellers see the brand and published listings. It only
-              goes live after you approve them.
-            </p>
-            {p.isApproved ? (
-              <Link
-                href={`/providers/${p.slug}`}
-                className="mt-2 inline-block text-sm font-medium text-lake-bright hover:text-lake"
-              >
-                Open public storefront →
-              </Link>
-            ) : (
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <p className="text-sm text-ink-muted">
-                  Not live for travellers yet — approve first.
-                </p>
+            <div className="mt-6 border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">After approval (ops)</h3>
+              <p className="mt-1 text-xs text-ink-muted">
+                Payout and eTIMS settings the provider can complete once approved.
+              </p>
+              <dl className="mt-2 space-y-2 text-sm text-ink-muted">
+                <Row label="Payout phone" value={p.payoutPhone || "— pending"} />
+                <Row label="eTIMS" value={p.etimsEnabled ? "Enabled" : "Off (default)"} />
+              </dl>
+            </div>
+            <div className="mt-5 border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink">Public storefront</h3>
+              <p className="mt-1 text-xs text-ink-muted">
+                Their public business page on Safari Hub (
+                <code className="text-[0.7rem]">/providers/…</code>
+                ), where travellers see the brand and published listings. It only
+                goes live after you approve them.
+              </p>
+              {p.isApproved ? (
                 <Link
                   href={`/providers/${p.slug}`}
-                  className="text-sm font-medium text-lake-bright hover:text-lake"
+                  className="mt-2 inline-block text-sm font-medium text-lake-bright hover:text-lake"
                 >
-                  Admin preview →
+                  Open public storefront →
                 </Link>
-              </div>
-            )}
-          </div>
-        </section>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-ink-muted">
+                    Not live for travellers yet — approve first.
+                  </p>
+                  <Link
+                    href={`/providers/${p.slug}`}
+                    className="text-sm font-medium text-lake-bright hover:text-lake"
+                  >
+                    Admin preview →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })()}
 
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <section className="admin-card rounded-xl p-5">
           <h2 className="font-display text-lg font-semibold">Team</h2>
           {data.members.length === 0 ? (

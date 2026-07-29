@@ -34,6 +34,7 @@ export async function POST(request: Request) {
             ? "Verification code sent by SMS"
             : "Verification code sent by email",
       ...(result.devCode ? { devCode: result.devCode } : {}),
+      ...(result.testCode ? { testCode: result.testCode } : {}),
     });
   } catch (error) {
     return handleRouteError(error);

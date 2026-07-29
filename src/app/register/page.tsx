@@ -26,6 +26,7 @@ import {
   REGISTRANT_ROLES,
   type RegistrantRole,
 } from "@/lib/provider-verification";
+import { checkIdentityFields } from "@/lib/check-identity-client";
 
 const DRAFT_KEY = "safari_hub_provider_signup_v3";
 
@@ -68,6 +69,20 @@ type Toast = { id: number; message: string; tone: "success" | "error" };
 
 const fieldClass =
   "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 font-normal outline-none transition focus:border-lake-bright focus:ring-2 focus:ring-lake-bright/30";
+
+const fieldErrorClass =
+  "mt-1 w-full rounded-lg border border-red-400 bg-white px-3 py-2 font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/30";
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <span className="mt-1 block text-xs font-medium text-red-700">{message}</span>
+  );
+}
+
+function inputClass(hasError: boolean) {
+  return hasError ? fieldErrorClass : fieldClass;
+}
 
 const SERIALIZABLE_SKIP = new Set([
   "termsAccepted",
@@ -154,6 +169,8 @@ function RegisterForm() {
   const draftHydrated = useRef(false);
 
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [checkingIdentity, setCheckingIdentity] = useState(false);
   const [loading, setLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [asProvider, setAsProvider] = useState(defaultProvider);
@@ -296,9 +313,13 @@ function RegisterForm() {
     }
   }, []);
 
-  function validateStep(current: number): string | null {
+  function validateStep(current: number): {
+    message: string | null;
+    fields: Record<string, string>;
+  } {
     const form = formRef.current;
-    if (!form) return "Form not ready";
+    const fields: Record<string, string> = {};
+    if (!form) return { message: "Form not ready", fields };
 
     if (current === 0) {
       const firstName = String(new FormData(form).get("firstName") || "").trim();
@@ -307,51 +328,53 @@ function RegisterForm() {
       const email = String(new FormData(form).get("email") || "").trim();
       const password = String(new FormData(form).get("password") || "");
       const phone = String(new FormData(form).get("phone") || "").trim();
-      if (firstName.length < 2) return "Enter your first name";
-      if (lastName.length < 2) return "Enter your last name";
-      if (!email.includes("@")) return "Enter a valid email";
+      if (firstName.length < 2) fields.firstName = "Enter your first name";
+      if (lastName.length < 2) fields.lastName = "Enter your last name";
+      if (!email.includes("@")) fields.email = "Enter a valid email";
       if (phone.replace(/\D/g, "").length < 10) {
-        return "Enter a valid Kenyan phone (at least 10 digits)";
+        fields.phone = "Enter a valid Kenyan phone (at least 10 digits)";
       }
       if (asProvider && idNumber.length < 3) {
-        return "Enter your national ID number";
+        fields.idNumber = "Enter your national ID number";
       }
-      if (password.length < 6) return "Password must be at least 6 characters";
-      return null;
-    }
-
-    if (current === 1) {
+      if (password.length < 6) {
+        fields.password = "Password must be at least 6 characters";
+      }
+    } else if (current === 1) {
       if (!registrantRole) {
-        return "Select who you are at this business (owner, manager, ICT, etc.)";
+        fields.registrantRole =
+          "Select who you are at this business (owner, manager, ICT, etc.)";
       }
       const businessName = String(
         new FormData(form).get("businessName") || "",
       ).trim();
-      if (businessName.length < 2) return "Enter the business / venue name";
+      if (businessName.length < 2) {
+        fields.businessName = "Enter the business / venue name";
+      }
       if (kycType === "COMPANY") {
         const reg = String(
           new FormData(form).get("registrationNumber") || "",
         ).trim();
-        if (reg.length < 3) return "Enter the company registration number";
+        if (reg.length < 3) {
+          fields.registrationNumber =
+            "Enter the company registration number";
+        }
       }
-      return null;
-    }
-
-    if (current === 2) {
+    } else if (current === 2) {
       const address = String(
         new FormData(form).get("postalAddress") || "",
       ).trim();
-      if (address.length < 5) return "Enter postal / physical address";
+      if (address.length < 5) {
+        fields.postalAddress = "Enter postal / physical address";
+      }
       if (!location.countyId || !location.townId) {
-        return "Select county and town so the map can show your place";
+        fields.location =
+          "Select county and town so the map can show your place";
+      } else if (location.latitude == null || location.longitude == null) {
+        fields.location =
+          "Map pin missing — choose a town or use GPS at the premises";
       }
-      if (location.latitude == null || location.longitude == null) {
-        return "Map pin missing — choose a town or use GPS at the premises";
-      }
-      return null;
-    }
-
-    if (current === 3) {
+    } else if (current === 3) {
       const companyEmail = String(
         new FormData(form).get("companyEmail") || "",
       ).trim();
@@ -368,61 +391,184 @@ function RegisterForm() {
       const mpesa = String(
         new FormData(form).get("mpesaTillOrPaybill") || "",
       ).trim();
-      if (!companyEmail.includes("@")) return "Enter company email";
+      if (!companyEmail.includes("@")) {
+        fields.companyEmail = "Enter company email";
+      }
       if (!/^[A-Z]\d{9}[A-Z]$/.test(kraPin)) {
-        return "Enter a valid KRA PIN (e.g. A123456789Z)";
+        fields.kraPin = "Enter a valid KRA PIN (e.g. A123456789Z)";
       }
-      if (!bt) return "Select business type";
+      if (!bt) fields.businessType = "Select business type";
       if (!establishedDate) {
-        return "Enter the date the business started operating";
+        fields.establishedDate =
+          "Enter the date the business started operating";
       }
-      if (mpesa.length < 3) return "Enter M-Pesa till or paybill number";
-      setBusinessType(bt);
-      return null;
-    }
-
-    if (current === 4) {
+      if (mpesa.replace(/\D/g, "").length < 5) {
+        fields.mpesaTillOrPaybill =
+          "Enter M-Pesa till or paybill (at least 5 digits)";
+      }
+      const opensAt = String(new FormData(form).get("opensAt") || "").trim();
+      const closesAt = String(new FormData(form).get("closesAt") || "").trim();
+      if (!opensAt || !closesAt) {
+        fields.opensAt = "Set opening and closing times";
+      }
+      if (bt) setBusinessType(bt);
+    } else if (current === 4) {
       const requiredDocs: Array<[string, string]> = [
         ["ownerIdDoc", "Upload the owner's national ID"],
         ["selfieDoc", "Upload a selfie holding your national ID"],
         ["kraPinDoc", "Upload the KRA PIN document"],
-        ["registrationCert", "Upload the certificate of incorporation"],
         ["businessPermit", "Upload the business permit / tourism licence"],
-        ["kycDoc", "Upload the CR12 / supporting document"],
       ];
+      if (kycType === "COMPANY") {
+        requiredDocs.push(
+          ["registrationCert", "Upload the certificate of incorporation"],
+          ["kycDoc", "Upload the CR12 / supporting document"],
+        );
+      }
       for (const [name, message] of requiredDocs) {
         const input = form.querySelector<HTMLInputElement>(
           `input[name="${name}"]`,
         );
-        if (!input?.files?.length) return message;
+        if (!input?.files?.length) {
+          fields[name] =
+            `${message} (re-select files if you refreshed the page)`;
+        }
       }
       const expiry = String(
         new FormData(form).get("businessPermitExpiresAt") || "",
       ).trim();
-      if (!expiry) return "Enter permit / TRA expiry date";
-      return null;
-    }
-
-    if (current === 5) {
+      if (!expiry) {
+        fields.businessPermitExpiresAt = "Enter permit / TRA expiry date";
+      }
+    } else if (current === 5) {
       if (amenities.length < 1) {
-        return "Select at least one amenity your business offers";
+        fields.amenities = "Select at least one amenity your business offers";
       }
-      return null;
+    } else if (current === 6) {
+      if (!termsAccepted) {
+        fields.termsAccepted = "Accept the Terms of Service to continue";
+      }
+      if (!privacyAccepted) {
+        fields.privacyAccepted = "Accept the Privacy Policy to continue";
+      }
+      if (!otpChannel) {
+        fields.otpChannel =
+          "Choose SMS or email verification at the bottom";
+      } else if (!contactVerified) {
+        fields.otp =
+          otpChannel === "phone"
+            ? "Send the SMS code and verify your phone before submitting"
+            : "Send the email code and verify your email before submitting";
+      }
     }
 
-    if (current === 6) {
-      if (!termsAccepted) return "Accept the Terms of Service to continue";
-      if (!privacyAccepted) return "Accept the Privacy Policy to continue";
-      if (!otpChannel) return "Choose SMS or email verification at the bottom";
-      if (!contactVerified) {
-        return otpChannel === "phone"
-          ? "Send the SMS code and verify your phone before submitting"
-          : "Send the email code and verify your email before submitting";
-      }
-      return null;
-    }
+    const message = Object.values(fields)[0] || null;
+    return { message, fields };
+  }
 
+  async function identityPayloadForStep(
+    current: number,
+  ): Promise<Parameters<typeof checkIdentityFields>[0] | null> {
+    const form = formRef.current;
+    if (!form) return null;
+    const fd = new FormData(form);
+
+    if (current === 0) {
+      return {
+        email: String(fd.get("email") || "").trim(),
+        phone: String(fd.get("phone") || "").trim(),
+        idNumber: asProvider
+          ? String(fd.get("idNumber") || "").trim()
+          : undefined,
+      };
+    }
+    if (current === 1 && kycType === "COMPANY") {
+      return {
+        registrationNumber: String(
+          fd.get("registrationNumber") || "",
+        ).trim(),
+      };
+    }
+    if (current === 2) {
+      return {
+        latitude: location.latitude,
+        longitude: location.longitude,
+      };
+    }
+    if (current === 3) {
+      return {
+        kraPin: String(fd.get("kraPin") || "").trim(),
+      };
+    }
     return null;
+  }
+
+  async function goNext() {
+    setError(null);
+    const local = validateStep(step);
+    if (local.message) {
+      setFieldErrors(local.fields);
+      setError(local.message);
+      scrollToFirstError(local.fields);
+      return;
+    }
+
+    const identityInput = await identityPayloadForStep(step);
+    if (identityInput) {
+      setCheckingIdentity(true);
+      try {
+        const check = await checkIdentityFields(identityInput);
+        if (!check.ok) {
+          setFieldErrors(check.fieldErrors);
+          setError(
+            Object.values(check.fieldErrors)[0] ||
+              "This detail is already registered",
+          );
+          scrollToFirstError(check.fieldErrors);
+          return;
+        }
+      } finally {
+        setCheckingIdentity(false);
+      }
+    }
+
+    setFieldErrors({});
+    const nextStep = Math.min(step + 1, maxStep);
+    if (asProvider) persistDraftLocal(nextStep);
+    setStep(nextStep);
+  }
+
+  function scrollToFirstError(fields: Record<string, string>) {
+    const first = Object.keys(fields)[0];
+    if (!first || !formRef.current) return;
+    const name =
+      first === "location" ? "postalAddress" : first === "otp" ? "phoneOtpId" : first;
+    const el = formRef.current.querySelector<HTMLElement>(
+      `[name="${name}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLSelectElement ||
+      el instanceof HTMLTextAreaElement
+    ) {
+      el.focus({ preventScroll: true });
+    }
+  }
+
+  function goBack() {
+    setError(null);
+    setFieldErrors({});
+    setStep((s) => Math.max(s - 1, 0));
+  }
+
+  function clearFieldError(name: string) {
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
   }
 
   async function sendOtp(channel: "phone" | "email") {
@@ -460,13 +606,25 @@ function RegisterForm() {
       if (channel === "phone") {
         setPhoneOtpId(data.otpId);
         setPhoneVerified(false);
-        setPhoneDevCode(data.devCode ?? null);
+        setPhoneDevCode(data.testCode || data.devCode || null);
+        // Prefer fixed test code so slow signup flows don't expire mid-test
+        const fill = data.testCode || data.devCode;
+        if (fill) setPhoneCode(String(fill).replace(/\D/g, "").slice(0, 6));
       } else {
         setEmailOtpId(data.otpId);
         setEmailVerified(false);
-        setEmailDevCode(data.devCode ?? null);
+        setEmailDevCode(data.testCode || data.devCode || null);
+        const fill = data.testCode || data.devCode;
+        if (fill) setEmailCode(String(fill).replace(/\D/g, "").slice(0, 6));
       }
-      pushToast(data.message || "Verification code sent", "success");
+      pushToast(
+        data.testCode
+          ? `Use test code ${data.testCode} (always valid in local dev)`
+          : data.devCode
+            ? `Code ready (dev: ${data.devCode})`
+            : data.message || "Verification code sent",
+        "success",
+      );
     } catch {
       setError("Network error — could not send code");
     } finally {
@@ -534,23 +692,6 @@ function RegisterForm() {
     }
   }
 
-  function goNext() {
-    setError(null);
-    const problem = validateStep(step);
-    if (problem) {
-      setError(problem);
-      return;
-    }
-    const nextStep = Math.min(step + 1, maxStep);
-    if (asProvider) persistDraftLocal(nextStep);
-    setStep(nextStep);
-  }
-
-  function goBack() {
-    setError(null);
-    setStep((s) => Math.max(s - 1, 0));
-  }
-
   async function saveAndFinishLater() {
     const form = formRef.current;
     if (!form || !asProvider) return;
@@ -590,19 +731,60 @@ function RegisterForm() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (asProvider && step < maxStep) {
-      goNext();
+      await goNext();
       return;
     }
 
     setLoading(true);
     setError(null);
+    setFieldErrors({});
     const formEl = e.currentTarget;
 
     if (asProvider) {
-      const problem = validateStep(maxStep);
-      if (problem) {
+      // Re-check every step — file inputs are cleared after refresh/draft restore
+      for (let s = 0; s <= maxStep; s++) {
+        const local = validateStep(s);
+        if (local.message) {
+          setLoading(false);
+          setStep(s);
+          setFieldErrors(local.fields);
+          setError(local.message);
+          return;
+        }
+        const identityInput = await identityPayloadForStep(s);
+        if (identityInput) {
+          const check = await checkIdentityFields(identityInput);
+          if (!check.ok) {
+            setLoading(false);
+            setStep(s);
+            setFieldErrors(check.fieldErrors);
+            setError(
+              Object.values(check.fieldErrors)[0] ||
+                "This detail is already registered",
+            );
+            return;
+          }
+        }
+      }
+    } else {
+      const local = validateStep(0);
+      if (local.message) {
         setLoading(false);
-        setError(problem);
+        setFieldErrors(local.fields);
+        setError(local.message);
+        return;
+      }
+      const check = await checkIdentityFields({
+        email: String(new FormData(formEl).get("email") || "").trim(),
+        phone: String(new FormData(formEl).get("phone") || "").trim(),
+      });
+      if (!check.ok) {
+        setLoading(false);
+        setFieldErrors(check.fieldErrors);
+        setError(
+          Object.values(check.fieldErrors)[0] ||
+            "This detail is already registered",
+        );
         return;
       }
     }
@@ -677,7 +859,14 @@ function RegisterForm() {
     const data = await res.json();
     if (!res.ok) {
       setLoading(false);
-      setError(data.error || "Registration failed");
+      const msg = data.error || "Registration failed";
+      setError(msg);
+      // Jump back to docs if uploads are the problem
+      if (/upload|document|selfie|permit|KRA PIN document|CR12|incorporation/i.test(msg)) {
+        setStep(4);
+      } else if (/OTP|verif/i.test(msg)) {
+        setStep(6);
+      }
       return;
     }
 
@@ -784,7 +973,20 @@ function RegisterForm() {
 
         <form
           ref={formRef}
-          onSubmit={onSubmit}
+          onSubmit={(e) => void onSubmit(e)}
+          onInput={(e) => {
+            const t = e.target;
+            if (
+              t instanceof HTMLInputElement ||
+              t instanceof HTMLSelectElement ||
+              t instanceof HTMLTextAreaElement
+            ) {
+              if (t.name) clearFieldError(t.name);
+              if (t.name === "countyId" || t.name === "townId") {
+                clearFieldError("location");
+              }
+            }
+          }}
           className="mt-6 space-y-4"
           encType="multipart/form-data"
           noValidate={asProvider}
@@ -798,8 +1000,9 @@ function RegisterForm() {
                   name="firstName"
                   required
                   autoComplete="given-name"
-                  className={fieldClass}
+                  className={inputClass(Boolean(fieldErrors.firstName))}
                 />
+                <FieldError message={fieldErrors.firstName} />
               </label>
               <label className="block text-sm font-medium text-ink">
                 Second name{" "}
@@ -816,8 +1019,9 @@ function RegisterForm() {
                   name="lastName"
                   required
                   autoComplete="family-name"
-                  className={fieldClass}
+                  className={inputClass(Boolean(fieldErrors.lastName))}
                 />
+                <FieldError message={fieldErrors.lastName} />
               </label>
             </div>
             <label className="block text-sm font-medium text-ink">
@@ -828,11 +1032,14 @@ function RegisterForm() {
                 inputMode="numeric"
                 placeholder="e.g. 12345678"
                 autoComplete="off"
-                className={fieldClass}
+                className={inputClass(Boolean(fieldErrors.idNumber))}
               />
-              <span className="mt-1 block text-xs font-normal text-ink-muted">
-                As on your national ID card
-              </span>
+              <FieldError message={fieldErrors.idNumber} />
+              {!fieldErrors.idNumber && (
+                <span className="mt-1 block text-xs font-normal text-ink-muted">
+                  As on your national ID card
+                </span>
+              )}
             </label>
             <label className="block text-sm font-medium text-ink">
               Email *
@@ -841,8 +1048,9 @@ function RegisterForm() {
                 type="email"
                 required
                 autoComplete="email"
-                className={fieldClass}
+                className={inputClass(Boolean(fieldErrors.email))}
               />
+              <FieldError message={fieldErrors.email} />
             </label>
             <label className="block text-sm font-medium text-ink">
               Phone *
@@ -856,11 +1064,14 @@ function RegisterForm() {
                 placeholder="0712 345 678"
                 pattern="[\d\s+\-]{10,}"
                 title="Kenyan phone with at least 10 digits"
-                className={fieldClass}
+                className={inputClass(Boolean(fieldErrors.phone))}
               />
-              <span className="mt-1 block text-xs font-normal text-ink-muted">
-                At least 10 digits · e.g. 0712345678 or +254712345678
-              </span>
+              <FieldError message={fieldErrors.phone} />
+              {!fieldErrors.phone && (
+                <span className="mt-1 block text-xs font-normal text-ink-muted">
+                  At least 10 digits · e.g. 0712345678 or +254712345678
+                </span>
+              )}
             </label>
             <label className="block text-sm font-medium text-ink">
               Password
@@ -870,8 +1081,9 @@ function RegisterForm() {
                 required={!asProvider || step === 0}
                 minLength={6}
                 autoComplete="new-password"
-                className={fieldClass}
+                className={inputClass(Boolean(fieldErrors.password))}
               />
+              <FieldError message={fieldErrors.password} />
             </label>
             <label
               className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition ${
@@ -926,8 +1138,9 @@ function RegisterForm() {
                     name="businessName"
                     required={step === 1}
                     placeholder="e.g. Lake Naivasha Lodge"
-                    className={fieldClass}
+                    className={inputClass(Boolean(fieldErrors.businessName))}
                   />
+                  <FieldError message={fieldErrors.businessName} />
                 </label>
               </section>
 
@@ -980,211 +1193,43 @@ function RegisterForm() {
                       name="registrationNumber"
                       required={step === 1}
                       placeholder="e.g. PVT-XXXXXXX"
-                      className={fieldClass}
+                      className={inputClass(
+                        Boolean(fieldErrors.registrationNumber),
+                      )}
                     />
+                    <FieldError message={fieldErrors.registrationNumber} />
                   </label>
                 )}
               </section>
 
-              {/* 3. Your role — simplified primary choices */}
+              {/* 3. Your role — dropdown */}
               <section className="space-y-2">
                 <p className="text-sm font-semibold text-ink">
                   3. Who are you at this company?
                 </p>
-                <p className="text-xs text-ink-muted">
-                  So admins know who submitted the registration.
-                </p>
-                <div className="mt-2 space-y-2">
-                  {(
-                    [
-                      {
-                        value: "OWNER" as const,
-                        label: "I'm the owner",
-                        hint: "I own or personally run this business",
-                      },
-                      {
-                        value: "DIRECTOR" as const,
-                        label: "I'm a company director",
-                        hint: "Registered director of the company",
-                      },
-                      {
-                        value: "MANAGER" as const,
-                        label: "I manage operations",
-                        hint: "Day-to-day manager or ops lead",
-                      },
-                      {
-                        value: "AGENT" as const,
-                        label: "I'm registering for someone else",
-                        hint: "Authorized agent acting for the owner",
-                      },
-                    ] as const
-                  ).map((r) => {
-                    const selected = registrantRole === r.value;
-                    return (
-                      <button
-                        key={r.value}
-                        type="button"
-                        onClick={() => setRegistrantRole(r.value)}
-                        className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
-                          selected
-                            ? "border-lake bg-lake text-sand"
-                            : "border-line bg-white text-ink hover:border-lake-bright"
-                        }`}
-                      >
-                        <span
-                          className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border ${
-                            selected
-                              ? "border-sand bg-sand"
-                              : "border-line bg-white"
-                          }`}
-                          aria-hidden
-                        >
-                          {selected && (
-                            <span className="size-1.5 rounded-full bg-lake" />
-                          )}
-                        </span>
-                        <span>
-                          <span className="block text-sm font-semibold">
-                            {r.label}
-                          </span>
-                          <span
-                            className={`mt-0.5 block text-xs ${
-                              selected ? "text-sand/80" : "text-ink-muted"
-                            }`}
-                          >
-                            {r.hint}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-
-                  {/* Staff — expands secondary roles */}
-                  <div
-                    className={`rounded-xl border transition ${
-                      (
-                        [
-                          "ICT",
-                          "FRONT_DESK",
-                          "ACCOUNTANT",
-                          "MARKETING",
-                          "OTHER",
-                        ] as const
-                      ).includes(
-                        registrantRole as
-                          | "ICT"
-                          | "FRONT_DESK"
-                          | "ACCOUNTANT"
-                          | "MARKETING"
-                          | "OTHER",
-                      )
-                        ? "border-lake bg-lake/5"
-                        : "border-line bg-white"
-                    }`}
+                <label className="block text-sm text-ink-muted">
+                  Your role *
+                  <select
+                    name="registrantRole"
+                    required={step === 1}
+                    value={registrantRole}
+                    onChange={(e) => {
+                      clearFieldError("registrantRole");
+                      setRegistrantRole(
+                        (e.target.value || "") as RegistrantRole | "",
+                      );
+                    }}
+                    className={inputClass(Boolean(fieldErrors.registrantRole))}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (
-                          !(
-                            [
-                              "ICT",
-                              "FRONT_DESK",
-                              "ACCOUNTANT",
-                              "MARKETING",
-                              "OTHER",
-                            ] as string[]
-                          ).includes(registrantRole)
-                        ) {
-                          setRegistrantRole("FRONT_DESK");
-                        }
-                      }}
-                      className="flex w-full items-start gap-3 px-4 py-3 text-left"
-                    >
-                      <span
-                        className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border ${
-                          (
-                            [
-                              "ICT",
-                              "FRONT_DESK",
-                              "ACCOUNTANT",
-                              "MARKETING",
-                              "OTHER",
-                            ] as string[]
-                          ).includes(registrantRole)
-                            ? "border-lake bg-lake"
-                            : "border-line bg-white"
-                        }`}
-                        aria-hidden
-                      >
-                        {(
-                          [
-                            "ICT",
-                            "FRONT_DESK",
-                            "ACCOUNTANT",
-                            "MARKETING",
-                            "OTHER",
-                          ] as string[]
-                        ).includes(registrantRole) && (
-                          <span className="size-1.5 rounded-full bg-sand" />
-                        )}
-                      </span>
-                      <span>
-                        <span className="block text-sm font-semibold text-ink">
-                          I work here (staff)
-                        </span>
-                        <span className="mt-0.5 block text-xs text-ink-muted">
-                          Front desk, ICT, finance, marketing, or other
-                        </span>
-                      </span>
-                    </button>
-                    {(
-                      [
-                        "ICT",
-                        "FRONT_DESK",
-                        "ACCOUNTANT",
-                        "MARKETING",
-                        "OTHER",
-                      ] as string[]
-                    ).includes(registrantRole) && (
-                      <div className="flex flex-wrap gap-2 border-t border-line/60 px-4 py-3">
-                        {(
-                          [
-                            { value: "FRONT_DESK" as const, label: "Front desk" },
-                            { value: "ICT" as const, label: "ICT / systems" },
-                            {
-                              value: "ACCOUNTANT" as const,
-                              label: "Finance",
-                            },
-                            {
-                              value: "MARKETING" as const,
-                              label: "Marketing",
-                            },
-                            { value: "OTHER" as const, label: "Other staff" },
-                          ] as const
-                        ).map((s) => (
-                          <button
-                            key={s.value}
-                            type="button"
-                            onClick={() => setRegistrantRole(s.value)}
-                            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                              registrantRole === s.value
-                                ? "border-lake bg-lake text-sand"
-                                : "border-line bg-white text-ink hover:border-lake-bright"
-                            }`}
-                          >
-                            {s.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <input
-                  type="hidden"
-                  name="registrantRole"
-                  value={registrantRole}
-                />
+                    <option value="">Select your role…</option>
+                    {REGISTRANT_ROLES.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldError message={fieldErrors.registrantRole} />
+                </label>
               </section>
             </div>
           )}
@@ -1194,9 +1239,15 @@ function RegisterForm() {
             <div className={step === 2 ? "block" : "hidden"}>
               <ProviderLocationSection
                 location={location}
-                onLocationChange={(next) =>
-                  setLocation((prev) => ({ ...prev, ...next }))
-                }
+                onLocationChange={(next) => {
+                  clearFieldError("location");
+                  clearFieldError("postalAddress");
+                  setLocation((prev) => ({ ...prev, ...next }));
+                }}
+                errors={{
+                  postalAddress: fieldErrors.postalAddress,
+                  location: fieldErrors.location,
+                }}
               />
             </div>
           )}
@@ -1215,7 +1266,18 @@ function RegisterForm() {
                 }
               }}
             >
-              <ProviderBusinessDetailsSection kycType={kycType} />
+              <ProviderBusinessDetailsSection
+                kycType={kycType}
+                errors={{
+                  companyEmail: fieldErrors.companyEmail,
+                  kraPin: fieldErrors.kraPin,
+                  businessType: fieldErrors.businessType,
+                  mpesaTillOrPaybill: fieldErrors.mpesaTillOrPaybill,
+                  establishedDate: fieldErrors.establishedDate,
+                  opensAt: fieldErrors.opensAt,
+                  closesAt: fieldErrors.closesAt,
+                }}
+              />
             </div>
           )}
 
@@ -1451,8 +1513,11 @@ function RegisterForm() {
                           : "Send SMS code"}
                     </button>
                     {phoneDevCode && (
-                      <p className="rounded-md bg-sand px-2 py-1 text-xs font-mono text-ink-muted">
-                        Dev code: {phoneDevCode}
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">
+                        Local test code (never expires):{" "}
+                        <span className="font-mono font-semibold">
+                          {phoneDevCode}
+                        </span>
                       </p>
                     )}
                     {phoneOtpId && !phoneVerified && (
@@ -1508,8 +1573,11 @@ function RegisterForm() {
                           : "Send email code"}
                     </button>
                     {emailDevCode && (
-                      <p className="rounded-md bg-sand px-2 py-1 text-xs font-mono text-ink-muted">
-                        Dev code: {emailDevCode}
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">
+                        Local test code (never expires):{" "}
+                        <span className="font-mono font-semibold">
+                          {emailDevCode}
+                        </span>
                       </p>
                     )}
                     {emailOtpId && !emailVerified && (
@@ -1594,10 +1662,11 @@ function RegisterForm() {
             {asProvider && step < maxStep ? (
               <button
                 type="button"
-                onClick={goNext}
-                className="flex-1 rounded-lg bg-lake py-2.5 text-sm font-semibold text-sand shadow-sm transition hover:bg-lake-bright"
+                onClick={() => void goNext()}
+                disabled={checkingIdentity}
+                className="flex-1 rounded-lg bg-lake py-2.5 text-sm font-semibold text-sand shadow-sm transition hover:bg-lake-bright disabled:opacity-60"
               >
-                Continue
+                {checkingIdentity ? "Checking…" : "Continue"}
               </button>
             ) : (
               <button

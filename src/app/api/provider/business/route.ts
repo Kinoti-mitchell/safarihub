@@ -6,10 +6,57 @@ import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import { validateKenyanPhone } from "@/lib/identity";
 import { normalizeAmenities } from "@/lib/amenities";
 
-const FULL_SELECT =
-  "id, name, slug, description, phone, email, logoUrl, termsAndConditions, isApproved, kycStatus, businessType, amenities, postalAddress, companyEmail, kraPin, mpesaTillOrPaybill, operatingDays, opensAt, closesAt, establishedDate, website, registrantRole, latitude, longitude, businessPermitExpiresAt, traLicenceExpiresAt, countyId, townId";
+const FULL_SELECT = [
+  "id",
+  "name",
+  "slug",
+  "description",
+  "phone",
+  "email",
+  "logoUrl",
+  "termsAndConditions",
+  "isApproved",
+  "kycStatus",
+  "kycType",
+  "idNumber",
+  "registrationNumber",
+  "businessType",
+  "amenities",
+  "postalAddress",
+  "companyEmail",
+  "kraPin",
+  "mpesaTillOrPaybill",
+  "operatingDays",
+  "opensAt",
+  "closesAt",
+  "establishedDate",
+  "website",
+  "registrantRole",
+  "latitude",
+  "longitude",
+  "businessPermitExpiresAt",
+  "traLicenceExpiresAt",
+  "countyId",
+  "townId",
+  "directors",
+  "otherDocsUrls",
+  "ownerIdDocUrl",
+  "kraPinDocUrl",
+  "registrationCertUrl",
+  "businessPermitUrl",
+  "kycDocUrl",
+  "selfieDocUrl",
+  "termsAcceptedAt",
+  "privacyAcceptedAt",
+  "phoneVerifiedAt",
+  "emailVerifiedAt",
+  "rejectionReason",
+  "rejectedAt",
+  "createdAt",
+].join(", ");
+
 const BASIC_SELECT =
-  "id, name, slug, description, phone, email, isApproved";
+  "id, name, slug, description, phone, email, isApproved, kycStatus";
 
 function isMissingColumnError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -23,6 +70,32 @@ function isMissingColumnError(error: unknown): boolean {
   );
 }
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(String).filter(Boolean);
+}
+
+function asDirectors(value: unknown): Array<{
+  name: string;
+  idNumber?: string | null;
+  role?: string | null;
+}> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((d) => {
+      if (!d || typeof d !== "object") return null;
+      const row = d as Record<string, unknown>;
+      const name = String(row.name || "").trim();
+      if (!name) return null;
+      return {
+        name,
+        idNumber: row.idNumber ? String(row.idNumber) : null,
+        role: row.role ? String(row.role) : null,
+      };
+    })
+    .filter((d): d is NonNullable<typeof d> => Boolean(d));
+}
+
 function withBrandDefaults(
   row: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -31,8 +104,38 @@ function withBrandDefaults(
     logoUrl: (row.logoUrl as string | null | undefined) ?? null,
     termsAndConditions:
       (row.termsAndConditions as string | null | undefined) ?? null,
-    amenities: Array.isArray(row.amenities) ? row.amenities : [],
+    amenities: asStringArray(row.amenities),
+    otherDocsUrls: asStringArray(row.otherDocsUrls),
+    directors: asDirectors(row.directors),
   };
+}
+
+async function attachLocationNames(
+  row: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const countyId = typeof row.countyId === "string" ? row.countyId : null;
+  const townId = typeof row.townId === "string" ? row.townId : null;
+  let countyName: string | null = null;
+  let townName: string | null = null;
+
+  if (countyId) {
+    const { data } = await db
+      .from("County")
+      .select("name")
+      .eq("id", countyId)
+      .maybeSingle();
+    countyName = (data?.name as string | undefined) || null;
+  }
+  if (townId) {
+    const { data } = await db
+      .from("Town")
+      .select("name")
+      .eq("id", townId)
+      .maybeSingle();
+    townName = (data?.name as string | undefined) || null;
+  }
+
+  return { ...row, countyName, townName };
 }
 
 export async function GET() {
@@ -55,7 +158,9 @@ export async function GET() {
         .maybeSingle();
       if (fallback.error) throw fallback.error;
       data = fallback.data
-        ? (withBrandDefaults(fallback.data as Record<string, unknown>) as typeof data)
+        ? (withBrandDefaults(
+            fallback.data as unknown as Record<string, unknown>,
+          ) as unknown as typeof data)
         : null;
       error = null;
     } else if (error) {
@@ -64,9 +169,38 @@ export async function GET() {
 
     if (!data) return jsonError("Business not found", 404);
 
-    return jsonOk({
-      business: withBrandDefaults(data as Record<string, unknown>),
-    });
+    const enriched = await attachLocationNames(
+      withBrandDefaults(data as unknown as Record<string, unknown>),
+    );
+
+    // Account owner (ProviderMember OWNER) — registration contact person
+    let owner: Record<string, unknown> | null = null;
+    const { data: ownerRow } = await db
+      .from("ProviderMember")
+      .select("role, user:User(id, name, email, phone, createdAt)")
+      .eq("providerId", provider.id)
+      .eq("role", "OWNER")
+      .limit(1)
+      .maybeSingle();
+
+    const userRaw = ownerRow?.user;
+    const user = Array.isArray(userRaw) ? userRaw[0] : userRaw;
+    if (user && typeof user === "object") {
+      const u = user as Record<string, unknown>;
+      owner = {
+        id: u.id ?? null,
+        name: u.name ?? null,
+        email: u.email ?? null,
+        phone: u.phone ?? null,
+        memberSince: u.createdAt ?? null,
+        nationalId: (enriched.idNumber as string | null) ?? null,
+        registrantRole: (enriched.registrantRole as string | null) ?? null,
+        idDocUrl: (enriched.ownerIdDocUrl as string | null) ?? null,
+        selfieDocUrl: (enriched.selfieDocUrl as string | null) ?? null,
+      };
+    }
+
+    return jsonOk({ business: enriched, owner });
   } catch (error) {
     return handleRouteError(error);
   }
@@ -87,6 +221,13 @@ export async function PATCH(request: Request) {
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     const { provider } = await requireProviderAccess(session.user.id);
+
+    if (!provider.isApproved) {
+      return jsonError(
+        "Business profile cannot be edited until an admin approves this business.",
+        403,
+      );
+    }
 
     const parsed = updateSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -160,15 +301,19 @@ export async function PATCH(request: Request) {
         .single();
       if (fallback.error) throw fallback.error;
       data = withBrandDefaults(
-        fallback.data as Record<string, unknown>,
-      ) as typeof data;
+        fallback.data as unknown as Record<string, unknown>,
+      ) as unknown as typeof data;
       error = null;
     } else if (error) {
       throw error;
     }
 
+    const enriched = await attachLocationNames(
+      withBrandDefaults(data as unknown as Record<string, unknown>),
+    );
+
     return jsonOk({
-      business: withBrandDefaults(data as Record<string, unknown>),
+      business: enriched,
       message: "Business profile saved",
     });
   } catch (error) {

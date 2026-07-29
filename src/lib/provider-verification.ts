@@ -178,7 +178,15 @@ export function parseOtherDocsUrls(raw: unknown): string[] {
     .slice(0, 10);
 }
 
-const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+const timeRe = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+
+/** Normalize browser time values (sometimes HH:MM:SS) to HH:MM. */
+export function normalizeTimeHm(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const m = raw.trim().match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+  if (!m) return null;
+  return `${m[1]}:${m[2]}`;
+}
 
 /**
  * Shared provider-verification fields (register + add-business).
@@ -391,7 +399,8 @@ export function refineProviderVerification(
       message: "Upload the KRA PIN document",
     });
   }
-  if (requireDocs && !data.registrationCertUrl?.trim()) {
+  const isCompany = (data.kycType || "INDIVIDUAL").toUpperCase() === "COMPANY";
+  if (requireDocs && isCompany && !data.registrationCertUrl?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["registrationCertUrl"],
@@ -405,7 +414,7 @@ export function refineProviderVerification(
       message: "Upload the business permit / tourism licence",
     });
   }
-  if (requireDocs && !data.kycDocUrl?.trim()) {
+  if (requireDocs && isCompany && !data.kycDocUrl?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["kycDocUrl"],
@@ -498,8 +507,8 @@ export function verificationInsertFromParsed(data: {
     businessType: data.businessType?.trim() || null,
     amenities,
     operatingDays: data.operatingDays?.trim() || null,
-    opensAt: data.opensAt?.trim() || null,
-    closesAt: data.closesAt?.trim() || null,
+  opensAt: data.opensAt?.trim() ? normalizeTimeHm(data.opensAt) : null,
+  closesAt: data.closesAt?.trim() ? normalizeTimeHm(data.closesAt) : null,
     establishedDate: data.establishedDate?.trim() || null,
     latitude: data.latitude ?? null,
     longitude: data.longitude ?? null,

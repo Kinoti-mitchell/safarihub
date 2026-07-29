@@ -46,7 +46,9 @@ export default function LoginPage() {
         return;
       }
       setOtpId(data.otpId);
-      setDevCode(data.devCode ?? null);
+      const fill = data.testCode || data.devCode;
+      setDevCode(fill ?? null);
+      if (fill) setOtpCode(String(fill).replace(/\D/g, "").slice(0, 6));
     } catch {
       setError("Network error — could not send code");
     } finally {
@@ -228,8 +230,9 @@ export default function LoginPage() {
               {sendingOtp ? "Sending…" : otpId ? "Resend code" : "Send login code"}
             </button>
             {devCode && (
-              <p className="rounded-md bg-sand px-2 py-1 text-xs font-mono text-ink-muted">
-                Dev code: {devCode}
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">
+                Local test code (never expires):{" "}
+                <span className="font-mono font-semibold">{devCode}</span>
               </p>
             )}
             <label className="block text-sm font-medium text-ink">

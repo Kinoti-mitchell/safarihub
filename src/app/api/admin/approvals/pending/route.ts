@@ -91,10 +91,13 @@ function resolveOwner(
 const PROVIDER_SELECT = `
   id, name, email, phone, commissionRate, isApproved, createdAt, updatedAt,
   kycType, idNumber, registrationNumber, kycDocUrl, kycStatus,
-  kraPin, companyEmail, postalAddress, businessType,
+  kraPin, companyEmail, postalAddress, businessType, amenities,
   operatingDays, opensAt, closesAt, establishedDate,
   latitude, longitude, website, directors, otherDocsUrls, registrantRole,
   ownerIdDocUrl, kraPinDocUrl, registrationCertUrl, businessPermitUrl,
+  selfieDocUrl, mpesaTillOrPaybill, businessPermitExpiresAt, traLicenceExpiresAt,
+  termsAcceptedAt, privacyAcceptedAt, phoneVerifiedAt, emailVerifiedAt,
+  rejectionReason, rejectedAt,
   county:County(name), town:Town(name),
   members:ProviderMember(
     role,
@@ -171,6 +174,7 @@ export async function GET() {
       companyEmail: string | null;
       postalAddress: string | null;
       businessType: string | null;
+      amenities: string[];
       operatingDays: string | null;
       opensAt: string | null;
       closesAt: string | null;
@@ -189,6 +193,15 @@ export async function GET() {
       kraPinDocUrl: string | null;
       registrationCertUrl: string | null;
       businessPermitUrl: string | null;
+      selfieDocUrl: string | null;
+      mpesaTillOrPaybill: string | null;
+      businessPermitExpiresAt: string | null;
+      traLicenceExpiresAt: string | null;
+      termsAcceptedAt: string | null;
+      privacyAcceptedAt: string | null;
+      phoneVerifiedAt: string | null;
+      emailVerifiedAt: string | null;
+      rejectionReason: string | null;
       countyName: string | null;
       townName: string | null;
       pendingListings: ReturnType<typeof mapListing>[];
@@ -268,6 +281,19 @@ export async function GET() {
         kraPinDocUrl: (p.kraPinDocUrl as string | null) ?? null,
         registrationCertUrl: (p.registrationCertUrl as string | null) ?? null,
         businessPermitUrl: (p.businessPermitUrl as string | null) ?? null,
+        selfieDocUrl: (p.selfieDocUrl as string | null) ?? null,
+        mpesaTillOrPaybill: (p.mpesaTillOrPaybill as string | null) ?? null,
+        businessPermitExpiresAt:
+          (p.businessPermitExpiresAt as string | null) ?? null,
+        traLicenceExpiresAt: (p.traLicenceExpiresAt as string | null) ?? null,
+        termsAcceptedAt: (p.termsAcceptedAt as string | null) ?? null,
+        privacyAcceptedAt: (p.privacyAcceptedAt as string | null) ?? null,
+        phoneVerifiedAt: (p.phoneVerifiedAt as string | null) ?? null,
+        emailVerifiedAt: (p.emailVerifiedAt as string | null) ?? null,
+        rejectionReason: (p.rejectionReason as string | null) ?? null,
+        amenities: Array.isArray(p.amenities)
+          ? (p.amenities as string[])
+          : [],
         countyName: countyRel?.name ?? null,
         townName: townRel?.name ?? null,
         pendingListings,

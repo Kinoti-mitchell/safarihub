@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AdminProviderSubmission } from "@/components/admin-provider-submission";
 
 type Toast = { id: number; message: string; tone: "success" | "error" };
 
@@ -40,6 +41,7 @@ type PendingBusiness = {
   companyEmail: string | null;
   postalAddress: string | null;
   businessType: string | null;
+  amenities: string[];
   operatingDays: string | null;
   opensAt: string | null;
   closesAt: string | null;
@@ -58,6 +60,15 @@ type PendingBusiness = {
   kraPinDocUrl: string | null;
   registrationCertUrl: string | null;
   businessPermitUrl: string | null;
+  selfieDocUrl: string | null;
+  mpesaTillOrPaybill: string | null;
+  businessPermitExpiresAt: string | null;
+  traLicenceExpiresAt: string | null;
+  termsAcceptedAt: string | null;
+  privacyAcceptedAt: string | null;
+  phoneVerifiedAt: string | null;
+  emailVerifiedAt: string | null;
+  rejectionReason: string | null;
   countyName: string | null;
   townName: string | null;
   pendingListings: PendingListing[];
@@ -163,6 +174,40 @@ export default function AdminApprovalsPage() {
         return;
       }
       pushToast(`${b.name} approved — confirmation sent`, "success");
+      setOpenBusinessId(null);
+      await load();
+    } catch {
+      pushToast("Network error — please try again", "error");
+    } finally {
+      setActionBusy(key, false);
+    }
+  }
+
+  async function rejectBusiness(b: PendingBusiness) {
+    const reason = window.prompt(
+      "Decline reason (shown to the provider):",
+      "Documents incomplete or unclear — please resubmit",
+    );
+    if (reason == null) return;
+    const key = `provider:${b.id}`;
+    setActionBusy(key, true);
+    try {
+      const res = await fetch(`/api/admin/providers/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isApproved: false,
+          kycStatus: "REJECTED",
+          rejectionReason: reason.trim() || "Documents incomplete",
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pushToast(body.error || "Could not decline", "error");
+        return;
+      }
+      pushToast(`${b.name} declined`, "success");
+      setOpenBusinessId(null);
       await load();
     } catch {
       pushToast("Network error — please try again", "error");
@@ -331,42 +376,11 @@ export default function AdminApprovalsPage() {
                                     </p>
                                   </button>
                                   <div className="flex flex-wrap items-center gap-2">
-                                    {!b.isApproved && (
-                                      <>
-                                        <label className="flex items-center gap-1 text-xs text-ink-muted">
-                                          Commission
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            max={50}
-                                            value={rate}
-                                            onChange={(e) =>
-                                              setRates((r) => ({
-                                                ...r,
-                                                [b.id]: Number(e.target.value),
-                                              }))
-                                            }
-                                            className="w-14 rounded border border-line px-2 py-1 text-sm"
-                                          />
-                                          %
-                                        </label>
-                                        <button
-                                          type="button"
-                                          disabled={isBusy}
-                                          onClick={() =>
-                                            void approveBusiness(b)
-                                          }
-                                          className="rounded-md bg-lake px-3 py-1.5 text-sm text-sand disabled:opacity-50"
-                                        >
-                                          {isBusy ? "Approving…" : "Approve"}
-                                        </button>
-                                      </>
-                                    )}
                                     <Link
-                                      href={`/admin/providers/${b.id}`}
-                                      className="rounded-md border border-line px-3 py-1.5 text-sm"
+                                      href={`/admin/providers/${b.id}?from=pending`}
+                                      className="rounded-md border border-lake px-3 py-1.5 text-sm font-semibold text-lake"
                                     >
-                                      Review
+                                      Open submission
                                     </Link>
                                     <button
                                       type="button"
@@ -375,14 +389,14 @@ export default function AdminApprovalsPage() {
                                           cur === b.id ? null : b.id,
                                         )
                                       }
-                                      className="text-sm text-ink-muted"
+                                      className="text-sm font-medium text-ink-muted"
                                       aria-label={
                                         bizOpen
-                                          ? "Hide listings"
-                                          : "Show listings"
+                                          ? "Hide details"
+                                          : "Show details"
                                       }
                                     >
-                                      {bizOpen ? "▾" : "▸"}
+                                      {bizOpen ? "Hide ▾" : "Review here ▸"}
                                     </button>
                                   </div>
                                 </div>
@@ -391,160 +405,67 @@ export default function AdminApprovalsPage() {
                               {bizOpen && (
                                 <div className="border-t border-line bg-sand/10 px-3 py-3">
                                   {!b.isApproved && (
-                                    <div className="mb-4 space-y-2 rounded-md border border-line bg-white p-3 text-sm">
-                                      <p className="font-semibold text-ink">
-                                        Verification checklist
-                                      </p>
-                                      <ul className="grid gap-1 text-xs text-ink-muted sm:grid-cols-2">
-                                        <li className="sm:col-span-2 font-medium text-ink">
-                                          Registered by:{" "}
-                                          {b.registrantRole
-                                            ? b.registrantRole
-                                                .replace(/_/g, " ")
-                                                .replace(/\b\w/g, (c) =>
-                                                  c.toUpperCase(),
-                                                )
-                                            : "—"}
-                                        </li>
-                                        <li>
-                                          Type:{" "}
-                                          {(b.businessType || "—").replace(
-                                            /_/g,
-                                            " ",
-                                          )}
-                                        </li>
-                                        <li>KRA: {b.kraPin || "—"}</li>
-                                        <li>
-                                          Company email:{" "}
-                                          {b.companyEmail || b.email || "—"}
-                                        </li>
-                                        <li>
-                                          Place:{" "}
-                                          {[b.townName, b.countyName]
-                                            .filter(Boolean)
-                                            .join(", ") || "—"}
-                                        </li>
-                                        <li className="sm:col-span-2">
-                                          Address: {b.postalAddress || "—"}
-                                        </li>
-                                        <li>
-                                          Hours: {b.operatingDays || "—"}{" "}
-                                          {b.opensAt && b.closesAt
-                                            ? `${b.opensAt}–${b.closesAt}`
-                                            : ""}
-                                        </li>
-                                        <li>
-                                          Established:{" "}
-                                          {b.establishedDate || "—"}
-                                        </li>
-                                        <li>
-                                          GPS:{" "}
-                                          {b.latitude != null &&
-                                          b.longitude != null
-                                            ? `${b.latitude.toFixed(4)}, ${b.longitude.toFixed(4)}`
-                                            : "—"}
-                                        </li>
-                                        <li>
-                                          Website:{" "}
-                                          {b.website ? (
-                                            <a
-                                              href={b.website}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="text-lake-bright underline"
+                                    <div className="mb-4">
+                                      <AdminProviderSubmission
+                                        business={b}
+                                        owner={{
+                                          name: o.ownerName,
+                                          email: o.ownerEmail,
+                                          phone: o.ownerPhone,
+                                        }}
+                                        detailHref={`/admin/providers/${b.id}?from=pending`}
+                                        actions={
+                                          <div className="flex flex-wrap items-center gap-3">
+                                            <label className="flex items-center gap-1.5 text-sm text-ink">
+                                              Commission
+                                              <input
+                                                type="number"
+                                                min={0}
+                                                max={50}
+                                                value={rate}
+                                                onChange={(e) =>
+                                                  setRates((r) => ({
+                                                    ...r,
+                                                    [b.id]: Number(
+                                                      e.target.value,
+                                                    ),
+                                                  }))
+                                                }
+                                                className="w-16 rounded-md border border-line bg-white px-2 py-1.5 text-sm"
+                                              />
+                                              %
+                                            </label>
+                                            <button
+                                              type="button"
+                                              disabled={isBusy}
+                                              onClick={() =>
+                                                void approveBusiness(b)
+                                              }
+                                              className="rounded-md bg-lake px-4 py-2 text-sm font-semibold text-sand disabled:opacity-50"
                                             >
-                                              {b.website.replace(/^https?:\/\//, "")}
-                                            </a>
-                                          ) : (
-                                            "—"
-                                          )}
-                                        </li>
-                                        <li className="sm:col-span-2">
-                                          Directors:{" "}
-                                          {b.directors?.length
-                                            ? b.directors
-                                                .map(
-                                                  (d) =>
-                                                    `${d.name}${d.role ? ` (${d.role})` : ""}`,
-                                                )
-                                                .join("; ")
-                                            : "—"}
-                                        </li>
-                                      </ul>
-                                      <div className="flex flex-wrap gap-2 pt-1">
-                                        {b.ownerIdDocUrl && (
-                                          <a
-                                            href={b.ownerIdDocUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-xs font-medium text-lake-bright underline"
-                                          >
-                                            Owner ID
-                                          </a>
-                                        )}
-                                        {b.kraPinDocUrl && (
-                                          <a
-                                            href={b.kraPinDocUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-xs font-medium text-lake-bright underline"
-                                          >
-                                            KRA PIN
-                                          </a>
-                                        )}
-                                        {b.registrationCertUrl && (
-                                          <a
-                                            href={b.registrationCertUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-xs font-medium text-lake-bright underline"
-                                          >
-                                            Certificate of incorporation
-                                          </a>
-                                        )}
-                                        {b.businessPermitUrl && (
-                                          <a
-                                            href={b.businessPermitUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-xs font-medium text-lake-bright underline"
-                                          >
-                                            Business permit
-                                          </a>
-                                        )}
-                                        {b.kycDocUrl && (
-                                          <a
-                                            href={b.kycDocUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-xs font-medium text-lake-bright underline"
-                                          >
-                                            CR12 / supporting
-                                          </a>
-                                        )}
-                                        {(b.otherDocsUrls || []).map((url, i) => (
-                                          <a
-                                            key={`${url}-${i}`}
-                                            href={url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-xs font-medium text-lake-bright underline"
-                                          >
-                                            Other doc {i + 1}
-                                          </a>
-                                        ))}
-                                        {!b.ownerIdDocUrl &&
-                                          !b.kraPinDocUrl &&
-                                          !b.registrationCertUrl &&
-                                          !b.kycDocUrl &&
-                                          !(b.otherDocsUrls || []).length && (
-                                            <span className="text-xs text-red-700">
-                                              No documents uploaded
-                                            </span>
-                                          )}
-                                      </div>
+                                              {isBusy
+                                                ? "Working…"
+                                                : "Approve & notify"}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              disabled={isBusy}
+                                              onClick={() =>
+                                                void rejectBusiness(b)
+                                              }
+                                              className="rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+                                            >
+                                              Decline
+                                            </button>
+                                          </div>
+                                        }
+                                      />
                                     </div>
                                   )}
+                                  <div className="border-t border-line pt-3">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                                      Pending listings
+                                    </p>
                                   {b.pendingListings.length === 0 ? (
                                     <p className="py-2 text-center text-sm text-ink-muted">
                                       {b.isApproved
@@ -645,6 +566,7 @@ export default function AdminApprovalsPage() {
                                       })}
                                     </ul>
                                   )}
+                                  </div>
                                 </div>
                               )}
                             </div>

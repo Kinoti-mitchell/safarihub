@@ -197,8 +197,29 @@ export async function GET(_request: Request, { params }: Params) {
       },
     );
 
+    let countyName: string | null = null;
+    let townName: string | null = null;
+    const countyId = provider.countyId as string | null;
+    const townId = provider.townId as string | null;
+    if (countyId || townId) {
+      const [countyRes, townRes] = await Promise.all([
+        countyId
+          ? db.from("County").select("name").eq("id", countyId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        townId
+          ? db.from("Town").select("name").eq("id", townId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      countyName = (countyRes.data as { name?: string } | null)?.name ?? null;
+      townName = (townRes.data as { name?: string } | null)?.name ?? null;
+    }
+
     return jsonOk({
-      provider,
+      provider: {
+        ...provider,
+        countyName,
+        townName,
+      },
       hardGates: approval.gates,
       autoApproveEnabled: approval.enabled,
       members: membersRes.data ?? [],

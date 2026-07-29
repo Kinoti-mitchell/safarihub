@@ -5,8 +5,28 @@ import { sendSms, normalizePhone } from "@/lib/sms";
 import { sendEmail } from "@/lib/email";
 import { normalizeEmail, phoneVariants } from "@/lib/identity";
 
-const OTP_TTL_MS = 10 * 60 * 1000;
+const isProd = process.env.NODE_ENV === "production";
+/** Production: 10 min. Local/dev: 24h so slow signup flows don't expire mid-test. */
+const OTP_TTL_MS = isProd ? 10 * 60 * 1000 : 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
+
+/**
+ * Fixed code for local testing (never enabled in production unless OTP_ALLOW_TEST_CODE=true).
+ * Default: 000000 — set OTP_TEST_CODE in .env to override.
+ */
+export function getTestOtpCode(): string | null {
+  const allow =
+    process.env.OTP_ALLOW_TEST_CODE === "true" ||
+    process.env.NODE_ENV !== "production";
+  if (!allow) return null;
+  const raw = (process.env.OTP_TEST_CODE || "000000").replace(/\D/g, "");
+  return /^\d{6}$/.test(raw) ? raw : "000000";
+}
+
+function isTestOtpCode(code: string): boolean {
+  const test = getTestOtpCode();
+  return Boolean(test && code === test);
+}
 
 export function hashOtp(code: string): string {
   return createHash("sha256").update(code).digest("hex");
@@ -23,7 +43,10 @@ export async function createAndSendOtp(opts: {
   destination: string;
   /** signup = any number; login = must already have an account */
   purpose?: "signup" | "login";
-}): Promise<{ ok: true; otpId: string; devCode?: string } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; otpId: string; devCode?: string; testCode?: string }
+  | { ok: false; error: string }
+> {
   let destination: string;
   if (opts.channel === "phone") {
     const phone = normalizePhone(opts.destination);
@@ -87,10 +110,12 @@ export async function createAndSendOtp(opts: {
     return { ok: false, error: error.message };
   }
 
+  const ttlLabel = isProd ? "10 minutes" : "24 hours (dev)";
+  const testCode = getTestOtpCode();
   const message =
     opts.purpose === "login"
-      ? `Your Safari Hub login code is ${code}. It expires in 10 minutes.`
-      : `Your Safari Hub verification code is ${code}. It expires in 10 minutes.`;
+      ? `Your Safari Hub login code is ${code}. It expires in ${ttlLabel}.`
+      : `Your Safari Hub verification code is ${code}. It expires in ${ttlLabel}.`;
   let delivered = false;
   if (opts.channel === "phone") {
     delivered = await sendSms(destination, message);
@@ -99,12 +124,11 @@ export async function createAndSendOtp(opts: {
       to: destination,
       subject: "Safari Hub verification code",
       text: message,
-      html: `<p>Your Safari Hub verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes.</p>`,
+      html: `<p>Your Safari Hub verification code is <strong>${code}</strong>.</p><p>It expires in ${ttlLabel}.</p>`,
     });
   }
 
-  const isDev = process.env.NODE_ENV !== "production";
-  if (!delivered && !isDev) {
+  if (!delivered && isProd) {
     return {
       ok: false,
       error:
@@ -114,10 +138,13 @@ export async function createAndSendOtp(opts: {
     };
   }
 
+  // In dev (or when delivery failed), surface codes for the UI.
+  const showDev = !isProd || !delivered;
   return {
     ok: true,
     otpId,
-    ...(isDev || !delivered ? { devCode: code } : {}),
+    ...(showDev ? { devCode: code } : {}),
+    ...(testCode && !isProd ? { testCode } : {}),
   };
 }
 
@@ -140,7 +167,18 @@ export async function verifyOtp(opts: {
     .select("*")
     .eq("id", opts.otpId)
     .maybeSingle();
-  if (error || !row) {
+  if (error) {
+    console.error("OTP verify lookup error:", error.message);
+    if (/VerificationOtp|does not exist|schema cache/i.test(error.message)) {
+      return {
+        ok: false,
+        error:
+          "Database needs db/2026-provider-verification-extras.sql applied for OTP.",
+      };
+    }
+    return { ok: false, error: "Could not verify code — try again" };
+  }
+  if (!row) {
     return { ok: false, error: "Code expired or not found — request a new one" };
   }
 
@@ -152,42 +190,64 @@ export async function verifyOtp(opts: {
     };
   }
 
-  if (new Date(row.expiresAt as string).getTime() < Date.now()) {
+  const usingTestCode = isTestOtpCode(code);
+
+  // Test code skips expiry so slow local signup flows still work.
+  if (!usingTestCode && new Date(row.expiresAt as string).getTime() < Date.now()) {
     return { ok: false, error: "Code expired — request a new one" };
   }
 
-  if ((row.attempts as number) >= MAX_ATTEMPTS) {
+  if (!usingTestCode && (row.attempts as number) >= MAX_ATTEMPTS) {
     return { ok: false, error: "Too many attempts — request a new code" };
   }
 
+  // Destination check is soft: otpId is already unique. Only fail if the
+  // provided destination normalizes to a *different* valid destination.
   if (opts.destination) {
     const expected =
       row.channel === "phone"
         ? normalizePhone(opts.destination)
         : normalizeEmail(opts.destination);
-    if (!expected || expected !== row.destination) {
+    if (
+      expected &&
+      row.destination &&
+      expected !== (row.destination as string)
+    ) {
       return {
         ok: false,
         error:
           row.channel === "phone"
-            ? "Phone number does not match the code we sent — check the number on Account"
-            : "Email does not match the code we sent — check the address on Account",
+            ? "Phone number does not match the code we sent — check Account step"
+            : "Email does not match the code we sent — check Account step",
       };
     }
   }
 
-  await db
-    .from("VerificationOtp")
-    .update({ attempts: (row.attempts as number) + 1 })
-    .eq("id", opts.otpId);
+  if (!usingTestCode) {
+    const nextAttempts = (row.attempts as number) + 1;
+    await db
+      .from("VerificationOtp")
+      .update({ attempts: nextAttempts })
+      .eq("id", opts.otpId);
 
-  if (hashOtp(code) !== row.codeHash) {
-    return { ok: false, error: "Incorrect code" };
+    if (hashOtp(code) !== row.codeHash) {
+      const hint = getTestOtpCode();
+      return {
+        ok: false,
+        error: hint
+          ? `Incorrect code (${nextAttempts}/${MAX_ATTEMPTS}). Use the sent code, or test code ${hint}.`
+          : `Incorrect code (${nextAttempts}/${MAX_ATTEMPTS}). Use the 6-digit code shown after Send.`,
+      };
+    }
   }
 
+  // Refresh expiry window so signup can finish after verify (esp. test / slow flows)
   await db
     .from("VerificationOtp")
-    .update({ verified: true })
+    .update({
+      verified: true,
+      expiresAt: new Date(Date.now() + OTP_TTL_MS).toISOString(),
+    })
     .eq("id", opts.otpId);
 
   return {

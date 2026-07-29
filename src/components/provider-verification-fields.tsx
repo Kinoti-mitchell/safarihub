@@ -22,6 +22,19 @@ const acceptDocs = "image/jpeg,image/png,image/webp,image/gif,application/pdf";
 const fieldClass =
   "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 font-normal outline-none transition focus:border-lake-bright focus:ring-2 focus:ring-lake-bright/30";
 
+const fieldErrorClass =
+  "mt-1 w-full rounded-lg border border-red-400 bg-white px-3 py-2 font-normal outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/30";
+
+function FieldHint({ error, hint }: { error?: string; hint?: string }) {
+  if (error) {
+    return <span className="mt-1 block text-xs font-medium text-red-700">{error}</span>;
+  }
+  if (hint) {
+    return <span className="mt-1 block text-xs font-normal text-ink-muted">{hint}</span>;
+  }
+  return null;
+}
+
 function DocField({
   name,
   label,
@@ -58,10 +71,12 @@ export function ProviderLocationSection({
   location,
   onLocationChange,
   showPostal = true,
+  errors,
 }: {
   location: LocState;
   onLocationChange: (next: Partial<LocState>) => void;
   showPostal?: boolean;
+  errors?: Partial<Record<"postalAddress" | "location" | "countyId" | "townId", string>>;
 }) {
   return (
     <div className="space-y-4">
@@ -82,8 +97,9 @@ export function ProviderLocationSection({
             rows={2}
             minLength={5}
             placeholder="P.O. Box or street address"
-            className={fieldClass}
+            className={errors?.postalAddress ? fieldErrorClass : fieldClass}
           />
+          <FieldHint error={errors?.postalAddress} />
         </label>
       )}
 
@@ -97,6 +113,11 @@ export function ProviderLocationSection({
         mapClassName="h-72 w-full"
         onChange={(next) => onLocationChange(next)}
       />
+      {(errors?.location || errors?.countyId || errors?.townId) && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+          {errors.location || errors.countyId || errors.townId}
+        </p>
+      )}
       <input type="hidden" name="countyId" value={location.countyId} />
       <input type="hidden" name="townId" value={location.townId} />
       <input type="hidden" name="latitude" value={location.latitude ?? ""} />
@@ -107,8 +128,10 @@ export function ProviderLocationSection({
 
 export function ProviderBusinessDetailsSection({
   kycType,
+  errors,
 }: {
   kycType: "INDIVIDUAL" | "COMPANY";
+  errors?: Partial<Record<"companyEmail" | "kraPin" | "businessType" | "mpesaTillOrPaybill" | "establishedDate" | "opensAt" | "closesAt", string>>;
 }) {
   const [directors, setDirectors] = useState<CompanyDirector[]>(
     kycType === "COMPANY" ? [{ name: "", idNumber: "", role: "Director" }] : [],
@@ -157,8 +180,9 @@ export function ProviderBusinessDetailsSection({
           required
           autoComplete="organization"
           placeholder="bookings@yourlodge.co.ke"
-          className={fieldClass}
+          className={errors?.companyEmail ? fieldErrorClass : fieldClass}
         />
+        <FieldHint error={errors?.companyEmail} />
       </label>
 
       <label className="block text-sm font-medium text-ink">
@@ -181,13 +205,22 @@ export function ProviderBusinessDetailsSection({
           placeholder="A123456789Z"
           pattern="[A-Za-z]\d{9}[A-Za-z]"
           title="Kenyan KRA PIN, e.g. A123456789Z"
-          className={`${fieldClass} uppercase`}
+          className={`${errors?.kraPin ? fieldErrorClass : fieldClass} uppercase`}
+        />
+        <FieldHint
+          error={errors?.kraPin}
+          hint="Letter + 9 digits + letter, e.g. A123456789Z"
         />
       </label>
 
       <label className="block text-sm font-medium text-ink">
         Type of business *
-        <select name="businessType" required defaultValue="" className={fieldClass}>
+        <select
+          name="businessType"
+          required
+          defaultValue=""
+          className={errors?.businessType ? fieldErrorClass : fieldClass}
+        >
           <option value="" disabled>
             Select type…
           </option>
@@ -197,6 +230,7 @@ export function ProviderBusinessDetailsSection({
             </option>
           ))}
         </select>
+        <FieldHint error={errors?.businessType} />
       </label>
 
       <label className="block text-sm font-medium text-ink">
@@ -206,11 +240,12 @@ export function ProviderBusinessDetailsSection({
           required
           inputMode="numeric"
           placeholder="e.g. 522522 or Till 123456"
-          className={fieldClass}
+          className={errors?.mpesaTillOrPaybill ? fieldErrorClass : fieldClass}
         />
-        <span className="mt-1 block text-xs font-normal text-ink-muted">
-          Used for payouts and to confirm the business receives money
-        </span>
+        <FieldHint
+          error={errors?.mpesaTillOrPaybill}
+          hint="Used for payouts and to confirm the business receives money"
+        />
       </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -236,8 +271,9 @@ export function ProviderBusinessDetailsSection({
             type="date"
             required
             max={new Date().toISOString().slice(0, 10)}
-            className={fieldClass}
+            className={errors?.establishedDate ? fieldErrorClass : fieldClass}
           />
+          <FieldHint error={errors?.establishedDate} />
         </label>
         <label className="block text-sm font-medium text-ink">
           Opens at *
@@ -246,8 +282,9 @@ export function ProviderBusinessDetailsSection({
             type="time"
             required
             defaultValue="08:00"
-            className={fieldClass}
+            className={errors?.opensAt ? fieldErrorClass : fieldClass}
           />
+          <FieldHint error={errors?.opensAt} />
         </label>
         <label className="block text-sm font-medium text-ink">
           Closes at *
@@ -256,8 +293,9 @@ export function ProviderBusinessDetailsSection({
             type="time"
             required
             defaultValue="20:00"
-            className={fieldClass}
+            className={errors?.closesAt ? fieldErrorClass : fieldClass}
           />
+          <FieldHint error={errors?.closesAt} />
         </label>
       </div>
 
@@ -364,17 +402,20 @@ export function ProviderBusinessDetailsSection({
 }
 
 export function ProviderDocumentsSection({
-  kycType: _kycType,
+  kycType,
 }: {
   kycType: "INDIVIDUAL" | "COMPANY";
 }) {
+  const isCompany = kycType === "COMPANY";
   return (
     <div className="space-y-3">
       <div>
         <h3 className="text-sm font-semibold text-ink">Verification documents</h3>
         <p className="mt-1 text-xs text-ink-muted">
-          All documents below are required except “Other documents”. JPEG, PNG
-          or PDF · max 8 MB each.
+          JPEG, PNG or PDF · max 8 MB each.
+          {isCompany
+            ? " Company filings (incorporation + CR12) are required."
+            : " Incorporation and CR12 are only required for companies."}
         </p>
       </div>
       <DocField
@@ -395,12 +436,14 @@ export function ProviderDocumentsSection({
         required
         hint="Scan or PDF of the KRA PIN certificate"
       />
-      <DocField
-        name="registrationCert"
-        label="Certificate of incorporation"
-        required
-        hint="Company certificate of incorporation / business registration"
-      />
+      {isCompany && (
+        <DocField
+          name="registrationCert"
+          label="Certificate of incorporation"
+          required
+          hint="Company certificate of incorporation / business registration"
+        />
+      )}
       <DocField
         name="businessPermit"
         label="Business permit / tourism licence"
@@ -427,12 +470,14 @@ export function ProviderDocumentsSection({
           />
         </label>
       </div>
-      <DocField
-        name="kycDoc"
-        label="CR12 / supporting document"
-        required
-        hint="CR12, lease agreement, or director affidavit"
-      />
+      {isCompany && (
+        <DocField
+          name="kycDoc"
+          label="CR12 / supporting document"
+          required
+          hint="CR12, lease agreement, or director affidavit"
+        />
+      )}
       <DocField
         name="otherDocs"
         label="Other documents"

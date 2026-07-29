@@ -347,3 +347,90 @@ async function findProviderKycClash(opts: {
   }
   return null;
 }
+
+/**
+ * Check each provided identity field independently and return every clash.
+ * Used for stepwise registration so users see field errors before advancing.
+ */
+export async function findAllIdentityClashes(input: {
+  email?: string | null;
+  phone?: string | null;
+  idNumber?: string | null;
+  registrationNumber?: string | null;
+  kraPin?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  excludeUserId?: string | null;
+  excludeProviderId?: string | null;
+}): Promise<IdentityClash[]> {
+  const checks: Array<Promise<IdentityClash | null>> = [];
+
+  if (input.email?.trim()) {
+    checks.push(
+      findIdentityClash({
+        email: input.email,
+        excludeUserId: input.excludeUserId,
+        excludeProviderId: input.excludeProviderId,
+      }),
+    );
+  }
+  if (input.phone?.trim()) {
+    checks.push(
+      findIdentityClash({
+        phone: input.phone,
+        excludeUserId: input.excludeUserId,
+        excludeProviderId: input.excludeProviderId,
+      }),
+    );
+  }
+  if (input.idNumber?.trim()) {
+    checks.push(
+      findIdentityClash({
+        idNumber: input.idNumber,
+        excludeUserId: input.excludeUserId,
+        excludeProviderId: input.excludeProviderId,
+      }),
+    );
+  }
+  if (input.registrationNumber?.trim()) {
+    checks.push(
+      findIdentityClash({
+        registrationNumber: input.registrationNumber,
+        excludeUserId: input.excludeUserId,
+        excludeProviderId: input.excludeProviderId,
+      }),
+    );
+  }
+  if (input.kraPin?.trim()) {
+    checks.push(
+      findIdentityClash({
+        kraPin: input.kraPin,
+        excludeUserId: input.excludeUserId,
+        excludeProviderId: input.excludeProviderId,
+      }),
+    );
+  }
+  if (
+    input.latitude != null &&
+    input.longitude != null &&
+    Number.isFinite(input.latitude) &&
+    Number.isFinite(input.longitude)
+  ) {
+    checks.push(
+      findIdentityClash({
+        latitude: input.latitude,
+        longitude: input.longitude,
+        excludeUserId: input.excludeUserId,
+        excludeProviderId: input.excludeProviderId,
+      }),
+    );
+  }
+
+  const results = await Promise.all(checks);
+  const byField = new Map<IdentityClash["field"], IdentityClash>();
+  for (const clash of results) {
+    if (!clash) continue;
+    if (!byField.has(clash.field)) byField.set(clash.field, clash);
+  }
+  return Array.from(byField.values());
+}

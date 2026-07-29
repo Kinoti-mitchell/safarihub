@@ -134,15 +134,13 @@ export function evaluateProviderHardGates(
     },
     {
       id: "incorporation",
-      label: isCompany
-        ? "Certificate of incorporation"
-        : "Certificate of incorporation / registration",
-      ok: hasUrl(p.registrationCertUrl),
+      label: "Certificate of incorporation",
+      ok: !isCompany || hasUrl(p.registrationCertUrl),
     },
     {
       id: "cr12",
-      label: isCompany ? "CR12 / supporting doc" : "Supporting KYC document",
-      ok: hasUrl(p.kycDocUrl),
+      label: "CR12 / supporting doc",
+      ok: !isCompany || hasUrl(p.kycDocUrl),
     },
     {
       id: "amenities",

@@ -19,9 +19,14 @@ import {
   providerVerificationFields,
   refineProviderVerification,
   verificationInsertFromParsed,
+  normalizeTimeHm,
 } from "@/lib/provider-verification";
 import { resolveHardGateAutoApproval } from "@/lib/provider-auto-approval";
 import { logAudit } from "@/lib/audit";
+
+function normalizeTimeFromForm(raw: string): string | undefined {
+  return normalizeTimeHm(raw) ?? undefined;
+}
 
 const registerSchema = z
   .object({
@@ -205,8 +210,8 @@ async function parseRegisterBody(request: Request): Promise<{
         townId: formStr(form, "townId") || undefined,
         businessType: formStr(form, "businessType") || undefined,
         operatingDays: formStr(form, "operatingDays") || undefined,
-        opensAt: formStr(form, "opensAt") || undefined,
-        closesAt: formStr(form, "closesAt") || undefined,
+        opensAt: normalizeTimeFromForm(formStr(form, "opensAt")),
+        closesAt: normalizeTimeFromForm(formStr(form, "closesAt")),
         establishedDate: formStr(form, "establishedDate") || undefined,
         latitude: formNum(form, "latitude"),
         longitude: formNum(form, "longitude"),
@@ -316,6 +321,10 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       const first =
         parsed.error.issues[0]?.message || "Invalid registration data";
+      console.warn(
+        "[register] validation failed:",
+        parsed.error.issues.slice(0, 5).map((i) => `${i.path.join(".")}: ${i.message}`),
+      );
       return NextResponse.json(
         { error: first, details: parsed.error.flatten() },
         { status: 400 },
@@ -559,7 +568,7 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      if (!registrationCertUrl) {
+      if (kycType === "COMPANY" && !registrationCertUrl) {
         await db.from("User").delete().eq("id", userId);
         return NextResponse.json(
           { error: "Upload the certificate of incorporation" },
@@ -573,7 +582,7 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      if (!kycDocUrl) {
+      if (kycType === "COMPANY" && !kycDocUrl) {
         await db.from("User").delete().eq("id", userId);
         return NextResponse.json(
           { error: "Upload the CR12 / supporting document" },
