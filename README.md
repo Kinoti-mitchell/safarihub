@@ -1,8 +1,9 @@
 # Safari Hub
 
-Localized hospitality operating system for Kenya.  
+Localized hospitality operating system.  
 Stack: **Next.js (PWA) + Supabase PostgreSQL** (SQL schema — not Prisma migrations).
 
+**Public frontend (GitHub Pages):** https://kinoti-mitchell.github.io/safarihub/  
 **User manual:** [USER_MANUAL.md](./USER_MANUAL.md) — travellers, operators, and admins.
 
 ## What it does
@@ -59,9 +60,20 @@ Open http://localhost:3000
 | Command | Purpose |
 |---------|---------|
 | `npm run dev` | Local development |
-| `npm run build` / `npm run start` | Production build |
+| `npm run build` / `npm run start` | Production build (full Next.js app) |
+| `npm run build:pages` | Static public frontend → `dist/` (GitHub Pages) |
 
-## Deploy (Render)
+## Deploy (GitHub Pages — public frontend)
+
+Same pattern as intern / TRace:
+
+1. Repo **Settings → Pages → Source: GitHub Actions**
+2. Push to `main` (workflow: `.github/workflows/deploy-pages.yml`)
+3. Live site: https://kinoti-mitchell.github.io/safarihub/
+
+This hosts the marketing frontend only. Booking, auth, provider, and admin need the full Next.js app (`npm run dev` or a Node host).
+
+## Deploy (Render — full app)
 
 1. Push to GitHub → Render Blueprint (`render.yaml`).
 2. Set env from `.env.example` (Supabase, `AUTH_SECRET`, app URL).

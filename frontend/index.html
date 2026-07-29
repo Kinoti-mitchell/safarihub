@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <title>Safari Hub</title>
+    <meta
+      name="description"
+      content="Hospitality marketplace — stays, dining, transport, and experiences."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./">
+        <span class="brand-mark" aria-hidden="true">SH</span>
+        <span class="brand-name" id="brand-name">Safari Hub</span>
+      </a>
+      <nav>
+        <a href="#categories">Explore</a>
+        <a href="#how">How it works</a>
+        <a
+          class="btn-ghost"
+          href="https://github.com/Kinoti-mitchell/safarihub"
+          target="_blank"
+          rel="noreferrer"
+          >Source</a
+        >
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="hero-slides" aria-hidden="true">
+        <div
+          class="hero-slide is-active"
+          style="background-image: url('./hero/elephants-savanna.jpg')"
+        ></div>
+        <div
+          class="hero-slide"
+          style="background-image: url('./hero/elephant-close.jpg')"
+        ></div>
+        <div
+          class="hero-slide"
+          style="background-image: url('./hero/elephant-herd.jpg')"
+        ></div>
+      </div>
+      <div class="hero-scrim"></div>
+      <div class="hero-copy">
+        <p class="eyebrow" id="market-label">Hospitality marketplace</p>
+        <h1 id="headline">One trip. Every piece.</h1>
+        <p class="lede" id="subheadline">
+          Stay, eat, move, explore and meet — stays, dining, transport and
+          experiences in one place.
+        </p>
+        <div class="hero-actions">
+          <a class="btn-sun" href="#categories">Browse categories</a>
+          <a
+            class="btn-outline"
+            href="https://github.com/Kinoti-mitchell/safarihub"
+            target="_blank"
+            rel="noreferrer"
+            >View on GitHub</a
+          >
+        </div>
+      </div>
+    </section>
+
+    <section id="categories" class="section">
+      <div class="section-head">
+        <h2>What you can find</h2>
+        <p>Five ways to plan a trip — same marketplace operators use.</p>
+      </div>
+      <div class="cat-grid">
+        <article class="cat">
+          <img src="./hero/elephants-savanna.jpg" alt="" />
+          <div>
+            <h3>Stays</h3>
+            <p>Lodges, hotels and guesthouses.</p>
+          </div>
+        </article>
+        <article class="cat">
+          <img src="./hero/elephant-close.jpg" alt="" />
+          <div>
+            <h3>Eat &amp; go out</h3>
+            <p>Restaurants, cafés and nightlife.</p>
+          </div>
+        </article>
+        <article class="cat">
+          <img src="./hero/elephant-herd.jpg" alt="" />
+          <div>
+            <h3>Move</h3>
+            <p>Transfers, car hire and rides.</p>
+          </div>
+        </article>
+        <article class="cat">
+          <img src="./hero/kenya-safari.jpg" alt="" />
+          <div>
+            <h3>Explore</h3>
+            <p>Tours, activities and days out.</p>
+          </div>
+        </article>
+        <article class="cat">
+          <img src="./hero/elephants-savanna.jpg" alt="" />
+          <div>
+            <h3>Meet</h3>
+            <p>Venues for events and gatherings.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="how" class="section section-alt">
+      <div class="section-head">
+        <h2>How it works</h2>
+      </div>
+      <ol class="steps">
+        <li>
+          <span>01</span>
+          <div>
+            <strong>Discover</strong>
+            <p>Browse verified stays and experiences by destination.</p>
+          </div>
+        </li>
+        <li>
+          <span>02</span>
+          <div>
+            <strong>Book &amp; pay</strong>
+            <p>Reserve instantly or on request — pay your preferred way.</p>
+          </div>
+        </li>
+        <li>
+          <span>03</span>
+          <div>
+            <strong>Enjoy the trip</strong>
+            <p>Turn up and enjoy — loyalty on every booking.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section cta">
+      <div class="cta-card">
+        <p class="eyebrow">Full app</p>
+        <h2>Run it locally</h2>
+        <p>
+          Booking, provider tools, and admin live in the Next.js app. Clone the
+          repo, set up Supabase, then <code>npm run dev</code>.
+        </p>
+        <a
+          class="btn-sun"
+          href="https://github.com/Kinoti-mitchell/safarihub"
+          target="_blank"
+          rel="noreferrer"
+          >Open repository</a
+        >
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <p>
+        © <span id="year"></span>
+        <span id="footer-brand">Safari Hub</span>
+      </p>
+      <p class="muted">
+        Public frontend on GitHub Pages · full stack in the repository
+      </p>
+    </footer>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
