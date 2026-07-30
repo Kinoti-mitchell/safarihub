@@ -241,6 +241,7 @@ nav a:hover {
   min-height: 11rem;
   background: var(--lake);
   color: var(--sand);
+  display: block;
 }
 
 .cat img {

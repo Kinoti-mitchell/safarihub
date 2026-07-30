@@ -24,6 +24,8 @@ jobs:
           node-version: "20"
       - name: Build static frontend
         run: node scripts/build-pages.mjs
+        env:
+          RENDER_APP_URL: ${{ vars.RENDER_APP_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

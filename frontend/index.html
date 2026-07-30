@@ -27,14 +27,17 @@
         <span class="brand-name" id="brand-name">Safari Hub</span>
       </a>
       <nav>
-        <a href="#categories">Explore</a>
-        <a href="#how">How it works</a>
+        <a data-app-href="/browse" href="https://safari-hub.onrender.com/browse"
+          >Browse</a
+        >
+        <a data-app-href="/login" href="https://safari-hub.onrender.com/login"
+          >Log in</a
+        >
         <a
           class="btn-ghost"
-          href="https://github.com/Kinoti-mitchell/safarihub"
-          target="_blank"
-          rel="noreferrer"
-          >Source</a
+          data-app-href="/register"
+          href="https://safari-hub.onrender.com/register"
+          >Join</a
         >
       </nav>
     </header>
@@ -63,13 +66,17 @@
           experiences in one place.
         </p>
         <div class="hero-actions">
-          <a class="btn-sun" href="#categories">Browse categories</a>
+          <a
+            class="btn-sun"
+            data-app-href="/browse"
+            href="https://safari-hub.onrender.com/browse"
+            >Open app</a
+          >
           <a
             class="btn-outline"
-            href="https://github.com/Kinoti-mitchell/safarihub"
-            target="_blank"
-            rel="noreferrer"
-            >View on GitHub</a
+            data-app-href="/register?role=provider"
+            href="https://safari-hub.onrender.com/register?role=provider"
+            >Become a provider</a
           >
         </div>
       </div>
@@ -81,41 +88,61 @@
         <p>Five ways to plan a trip — same marketplace operators use.</p>
       </div>
       <div class="cat-grid">
-        <article class="cat">
+        <a
+          class="cat"
+          data-app-href="/browse?category=stays"
+          href="https://safari-hub.onrender.com/browse?category=stays"
+        >
           <img src="./hero/elephants-savanna.jpg" alt="" />
           <div>
             <h3>Stays</h3>
             <p>Lodges, hotels and guesthouses.</p>
           </div>
-        </article>
-        <article class="cat">
+        </a>
+        <a
+          class="cat"
+          data-app-href="/browse?category=eat"
+          href="https://safari-hub.onrender.com/browse?category=eat"
+        >
           <img src="./hero/elephant-close.jpg" alt="" />
           <div>
             <h3>Eat &amp; go out</h3>
             <p>Restaurants, cafés and nightlife.</p>
           </div>
-        </article>
-        <article class="cat">
+        </a>
+        <a
+          class="cat"
+          data-app-href="/browse?category=move"
+          href="https://safari-hub.onrender.com/browse?category=move"
+        >
           <img src="./hero/elephant-herd.jpg" alt="" />
           <div>
             <h3>Move</h3>
             <p>Transfers, car hire and rides.</p>
           </div>
-        </article>
-        <article class="cat">
+        </a>
+        <a
+          class="cat"
+          data-app-href="/browse?category=explore"
+          href="https://safari-hub.onrender.com/browse?category=explore"
+        >
           <img src="./hero/kenya-safari.jpg" alt="" />
           <div>
             <h3>Explore</h3>
             <p>Tours, activities and days out.</p>
           </div>
-        </article>
-        <article class="cat">
+        </a>
+        <a
+          class="cat"
+          data-app-href="/browse?category=meet"
+          href="https://safari-hub.onrender.com/browse?category=meet"
+        >
           <img src="./hero/elephants-savanna.jpg" alt="" />
           <div>
             <h3>Meet</h3>
             <p>Venues for events and gatherings.</p>
           </div>
-        </article>
+        </a>
       </div>
     </section>
 
@@ -150,18 +177,17 @@
 
     <section class="section cta">
       <div class="cta-card">
-        <p class="eyebrow">Full app</p>
-        <h2>Run it locally</h2>
+        <p class="eyebrow">Live app</p>
+        <h2>Book on Safari Hub</h2>
         <p>
-          Booking, provider tools, and admin live in the Next.js app. Clone the
-          repo, set up Supabase, then <code>npm run dev</code>.
+          The full marketplace — browse, book, provider tools, and admin — runs
+          on Render. This GitHub Pages site is the public front door.
         </p>
         <a
           class="btn-sun"
-          href="https://github.com/Kinoti-mitchell/safarihub"
-          target="_blank"
-          rel="noreferrer"
-          >Open repository</a
+          data-app-href="/"
+          href="https://safari-hub.onrender.com/"
+          >Go to live app</a
         >
       </div>
     </section>
@@ -172,10 +198,20 @@
         <span id="footer-brand">Safari Hub</span>
       </p>
       <p class="muted">
-        Public frontend on GitHub Pages · full stack in the repository
+        Frontend:
+        <a href="https://kinoti-mitchell.github.io/safarihub/"
+          >GitHub Pages</a
+        >
+        · App:
+        <a
+          id="footer-app-link"
+          href="https://safari-hub.onrender.com/"
+          >Render</a
+        >
       </p>
     </footer>
 
+    <script src="./config.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
