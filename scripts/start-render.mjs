@@ -1,32 +1,33 @@
-import { spawn } from "node:child_process";
+import { createServer } from "node:http";
+import { parse } from "node:url";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import next from "next";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const port = String(process.env.PORT || 10000);
+const port = Number.parseInt(process.env.PORT || "10000", 10);
 const hostname = "0.0.0.0";
-const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
 
-console.log(`[render] starting Next.js on http://${hostname}:${port}`);
+const app = next({
+  dev: false,
+  dir: root,
+  hostname,
+  port,
+});
+const handle = app.getRequestHandler();
 
-const child = spawn(
-  process.execPath,
-  [nextBin, "start", "--hostname", hostname, "--port", port],
-  {
-    cwd: root,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      PORT: port,
-      HOSTNAME: hostname,
-    },
-  },
-);
+await app.prepare();
 
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-  process.exit(code ?? 1);
+const server = createServer((req, res) => {
+  const parsedUrl = parse(req.url || "/", true);
+  handle(req, res, parsedUrl);
+});
+
+server.listen(port, hostname, () => {
+  console.log(`[render] listening on http://${hostname}:${port}`);
+});
+
+server.on("error", (err) => {
+  console.error("[render] server error", err);
+  process.exit(1);
 });
