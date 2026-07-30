@@ -3,8 +3,8 @@
 Localized hospitality operating system.  
 Stack: **Next.js (PWA) + Supabase PostgreSQL** (SQL schema — not Prisma migrations).
 
-**Public frontend (GitHub Pages):** https://kinoti-mitchell.github.io/safarihub/  
-**Live app (Render):** https://safari-hub.onrender.com/  
+**Live app (full project on Render):** https://safari-hub.onrender.com/  
+**GitHub Pages:** https://kinoti-mitchell.github.io/safarihub/ (redirects to Render)  
 **User manual:** [USER_MANUAL.md](./USER_MANUAL.md) — travellers, operators, and admins.
 
 ## What it does
@@ -64,21 +64,22 @@ Open http://localhost:3000
 | `npm run build` / `npm run start` | Production build (full Next.js app) |
 | `npm run build:pages` | Static public frontend → `dist/` (GitHub Pages) |
 
-## Deploy (GitHub Pages — public frontend)
+## Deploy (GitHub Pages — redirect to live app)
 
-Same pattern as intern / TRace:
+GitHub Pages cannot run the Next.js server (APIs, auth, bookings).  
+The Pages site only redirects to the Render app.
 
 1. Repo **Settings → Pages → Source: GitHub Actions**
-2. Push to `main` (workflow: `.github/workflows/deploy-pages.yml`)
-3. Live site: https://kinoti-mitchell.github.io/safarihub/
+2. Push to `main`
+3. https://kinoti-mitchell.github.io/safarihub/ → https://safari-hub.onrender.com/
 
-This hosts the marketing frontend only. Booking, auth, provider, and admin need the full Next.js app (`npm run dev` or a Node host).
+## Deploy (Render — full app, same as local)
 
-## Deploy (Render — full app)
-
-1. Push to GitHub → Render Blueprint (`render.yaml`).
-2. Set env from `.env.example` (Supabase, `AUTH_SECRET`, app URL).
-3. Point Daraja callback URLs at the Render hostname.
+1. Push to GitHub → Render web service (`render.yaml`).
+2. **Start Command must be:** `node scripts/start-render.mjs`
+3. **Health Check Path:** `/api/health`
+4. Set env from `.env` + `NEXT_PUBLIC_APP_URL` / `AUTH_URL` = `https://safari-hub.onrender.com`
+5. Point Daraja callback URLs at the Render hostname.
 
 ## Policies
 

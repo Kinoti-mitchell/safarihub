@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Empty turbopack config so Next 16 doesn't conflict with optional webpack plugins later
+  // Required for a reliable Node server on Render (binds HOSTNAME/PORT correctly)
+  output: "standalone",
   turbopack: {},
   images: {
     remotePatterns: [

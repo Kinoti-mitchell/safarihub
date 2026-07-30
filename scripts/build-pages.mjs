@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
 const frontend = join(root, "frontend");
-const heroSrc = join(root, "public", "hero");
 
 const appUrl = (
   process.env.RENDER_APP_URL ||
@@ -17,19 +16,11 @@ const appUrl = (
 
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
-cpSync(frontend, dist, { recursive: true });
-cpSync(heroSrc, join(dist, "hero"), { recursive: true });
 
-writeFileSync(
-  join(dist, "config.js"),
-  `/** Live full app (Render). */\nwindow.SAFARI_HUB_APP_URL = ${JSON.stringify(appUrl)};\n`,
-);
+// GitHub Pages is only a redirect door to the full Render app.
+let html = readFileSync(join(frontend, "index.html"), "utf8");
+html = html.replaceAll("https://safari-hub.onrender.com", appUrl);
+writeFileSync(join(dist, "index.html"), html);
+writeFileSync(join(dist, "404.html"), html);
 
-const index = readFileSync(join(dist, "index.html"), "utf8").replaceAll(
-  "https://safari-hub.onrender.com",
-  appUrl,
-);
-writeFileSync(join(dist, "index.html"), index);
-writeFileSync(join(dist, "404.html"), index);
-
-console.log(`[pages] Built static frontend → dist/ (app: ${appUrl})`);
+console.log(`[pages] Built redirect → ${appUrl}`);
