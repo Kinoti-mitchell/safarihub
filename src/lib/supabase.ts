@@ -1,43 +1,56 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+function cleanEnv(value: string | undefined): string {
+  return (value || "")
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
+}
+
+function isValidSupabaseUrl(url: string): boolean {
+  if (!url || url.includes("YOUR_PROJECT") || url.includes("dashboard/project")) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 /** Same env shape as intern attachment system (with Next.js NEXT_PUBLIC_ aliases). */
 export function getSupabaseUrl() {
   return (
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    process.env.SUPABASE_URL?.trim() ||
+    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL) ||
+    cleanEnv(process.env.SUPABASE_URL) ||
     ""
   );
 }
 
 export function getSupabaseAnonKey() {
   return (
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
-    process.env.SUPABASE_ANON_KEY?.trim() ||
-    process.env.VITE_SUPABASE_ANON_KEY?.trim() ||
+    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
+    cleanEnv(process.env.SUPABASE_ANON_KEY) ||
+    cleanEnv(process.env.VITE_SUPABASE_ANON_KEY) ||
     ""
   );
 }
 
 export function getSupabaseServiceRoleKey() {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "";
+  return cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 export function isSupabaseConfigured() {
   const url = getSupabaseUrl();
-  return Boolean(
-    url &&
-      !url.includes("YOUR_PROJECT") &&
-      !url.includes("dashboard/project") &&
-      getSupabaseAnonKey(),
-  );
+  return Boolean(isValidSupabaseUrl(url) && getSupabaseAnonKey());
 }
 
 /** Browser / public client (anon key). Same pattern as intern `@/api/client`. */
 export function createSupabaseBrowserClient(): SupabaseClient {
   const url = getSupabaseUrl();
   const key = getSupabaseAnonKey();
-  if (!url || !key) {
+  if (!isValidSupabaseUrl(url) || !key) {
     throw new Error("Supabase URL / anon key not configured");
   }
   return createClient(url, key);
@@ -47,8 +60,10 @@ export function createSupabaseBrowserClient(): SupabaseClient {
 export function createSupabaseAdminClient(): SupabaseClient {
   const url = getSupabaseUrl();
   const serviceKey = getSupabaseServiceRoleKey();
-  if (!url || !serviceKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set");
+  if (!isValidSupabaseUrl(url) || !serviceKey) {
+    throw new Error(
+      "Supabase is not configured. Set SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY.",
+    );
   }
   return createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -57,24 +72,48 @@ export function createSupabaseAdminClient(): SupabaseClient {
 }
 
 /**
- * Shared server-side data client (service role). This is the TRace-style data
- * access layer — every server route/query goes through Supabase's HTTP
- * (PostgREST) API instead of a direct pooled Postgres connection, so there is
- * no connection pool to exhaust. Cached across the dev-server's hot reloads.
+ * Shared server-side data client (service role). Lazy so Next.js build-time
+ * page collection does not crash when env vars are missing or incomplete.
  */
 const globalForDb = globalThis as unknown as {
   supabaseData: SupabaseClient | undefined;
 };
 
-export const db: SupabaseClient =
-  globalForDb.supabaseData ?? createSupabaseAdminClient();
+function getDb(): SupabaseClient {
+  if (globalForDb.supabaseData) return globalForDb.supabaseData;
 
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.supabaseData = db;
+  const url = getSupabaseUrl();
+  const serviceKey = getSupabaseServiceRoleKey();
+
+  if (isValidSupabaseUrl(url) && serviceKey) {
+    globalForDb.supabaseData = createSupabaseAdminClient();
+  } else {
+    // Placeholder for build/import only — real requests need valid env at runtime.
+    globalForDb.supabaseData = createClient(
+      "https://placeholder.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder",
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+  }
+
+  return globalForDb.supabaseData;
 }
 
+export const db: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop, receiver) {
+    const client = getDb();
+    const value = Reflect.get(client as object, prop, receiver);
+    return typeof value === "function"
+      ? (value as (...args: unknown[]) => unknown).bind(client)
+      : value;
+  },
+});
+
 /** Throw a readable error from a PostgREST response. Mirrors intern error flow. */
-export function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
+export function unwrap<T>(res: {
+  data: T | null;
+  error: { message: string } | null;
+}): T {
   if (res.error) throw new Error(res.error.message);
   return res.data as T;
 }
