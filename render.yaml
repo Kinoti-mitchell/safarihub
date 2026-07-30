@@ -13,13 +13,15 @@ services:
     plan: free
     region: oregon
     buildCommand: npm ci --include=dev && npm run build
-    startCommand: next start --hostname 0.0.0.0 --port $PORT
+    startCommand: node scripts/start-render.mjs
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: HOSTNAME
+        value: "0.0.0.0"
       # Ensure next build can resolve Tailwind even if NODE_ENV=production
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
