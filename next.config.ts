@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Required for a reliable Node server on Render (binds HOSTNAME/PORT correctly)
-  output: "standalone",
+  // Standalone is for Render/Docker only — Vercel uses its own Next runtime.
+  ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   turbopack: {},
   images: {
     remotePatterns: [
