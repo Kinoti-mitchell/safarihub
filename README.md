@@ -64,22 +64,31 @@ Open http://localhost:3000
 | `npm run build` / `npm run start` | Production build (full Next.js app) |
 | `npm run build:pages` | Static public frontend → `dist/` (GitHub Pages) |
 
-## Deploy (GitHub Pages — redirect to live app)
+## Deploy (same idea as SAMAKI — push to GitHub, get a live URL)
 
-GitHub Pages cannot run the Next.js server (APIs, auth, bookings).  
-The Pages site only redirects to the Render app.
+**SAMAKI** was a Vite SPA → **GitHub Pages**  
+**Safari Hub** is Next.js (APIs + auth) → **Vercel** (GitHub Pages cannot run this app)
 
-1. Repo **Settings → Pages → Source: GitHub Actions**
-2. Push to `main`
-3. https://kinoti-mitchell.github.io/safarihub/ → https://safari-hub.onrender.com/
+### Live app on Vercel (recommended)
 
-## Deploy (Render — full app, same as local)
+1. Open: https://vercel.com/new/import?s=https://github.com/Kinoti-mitchell/safarihub  
+2. Sign in with GitHub → Import **safarihub**  
+3. Add Environment Variables (from your local `.env`):
+   - `AUTH_SECRET`
+   - `NEXT_PUBLIC_APP_URL` → your Vercel URL (set after first deploy, then redeploy)
+   - `AUTH_URL` → same as `NEXT_PUBLIC_APP_URL`
+   - `SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL`
+   - `SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `DATABASE_URL` / `DIRECT_URL`
+   - `GMAIL_USER` / `GMAIL_APP_PASSWORD`
+4. Deploy → open the `*.vercel.app` URL (full app, all pages, like local)
 
-1. Push to GitHub → Render web service (`render.yaml`).
-2. **Start Command must be:** `node scripts/start-render.mjs`
-3. **Health Check Path:** `/api/health`
-4. Set env from `.env` + `NEXT_PUBLIC_APP_URL` / `AUTH_URL` = `https://safari-hub.onrender.com`
-5. Point Daraja callback URLs at the Render hostname.
+GitHub Pages (`/safarihub`) can redirect to that Vercel URL once you have it.
+
+### Optional: Render
+
+`render.yaml` is still in the repo if you prefer Render, but Next.js works more reliably on Vercel.
 
 ## Policies
 
