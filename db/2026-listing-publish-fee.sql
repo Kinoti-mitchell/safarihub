@@ -32,22 +32,20 @@ CREATE INDEX IF NOT EXISTS "Listing_publishPaymentStatus_idx"
   ON "Listing"("publishPaymentStatus");
 
 -- Turn off legacy per-listing content review (business approval + pay-to-publish instead).
-INSERT INTO "Setting" ("id", "key", "value", "updatedAt")
+INSERT INTO "Setting" ("key", "value", "updatedAt")
 VALUES (
-  'setting_flags_requireListingApproval',
   'flags.requireListingApproval',
-  'false',
+  'false'::jsonb,
   CURRENT_TIMESTAMP
 )
 ON CONFLICT ("key") DO UPDATE
-SET "value" = 'false', "updatedAt" = CURRENT_TIMESTAMP;
+SET "value" = 'false'::jsonb, "updatedAt" = CURRENT_TIMESTAMP;
 
 -- Default publish fee (admin can change in Settings → Listing publish fee).
-INSERT INTO "Setting" ("id", "key", "value", "updatedAt")
+INSERT INTO "Setting" ("key", "value", "updatedAt")
 VALUES (
-  'setting_listing_publishFeeKes',
   'listing.publishFeeKes',
-  '500',
+  '500'::jsonb,
   CURRENT_TIMESTAMP
 )
 ON CONFLICT ("key") DO NOTHING;
