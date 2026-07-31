@@ -44,3 +44,6 @@ next-env.d.ts
 
 # local listing image uploads
 /public/uploads/
+
+.vercel
+.env*

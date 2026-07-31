@@ -125,14 +125,14 @@ export function defaultPermissionsForRole(role: Role): Permission[] {
 }
 
 /**
- * Built-in platform admins always have every right. Custom roles with
- * baseRole ADMIN use their RoleDefinition matrix instead.
+ * Platform admins always have every right — including users whose roleKey is a
+ * custom staff role. If base role is ADMIN, permissions are never restricted.
  */
 export function isBuiltInAdmin(user: {
   role: Role;
   roleKey?: string | null;
 }): boolean {
-  return user.role === "ADMIN" && (!user.roleKey || user.roleKey === "ADMIN");
+  return user.role === "ADMIN";
 }
 
 /** Static fallback check against built-in defaults (DB overrides at runtime). */

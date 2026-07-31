@@ -142,8 +142,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = user.role;
         token.roleKey = user.roleKey ?? null;
         // Stamp an absolute expiry at login based on the configured minutes.
+        // Floor at 2h so admin console uploads/nav don't die mid-review.
         const settings = await getPlatformSettings();
-        const minutes = numberSetting(settings, "security.sessionMinutes") || 60;
+        const configured =
+          numberSetting(settings, "security.sessionMinutes") || 120;
+        const minutes = Math.max(120, configured);
         token.absExp = Date.now() + minutes * 60_000;
       }
       // Enforce the absolute session lifetime — no multi-day sessions.
@@ -153,6 +156,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
+      if (!token?.id) {
+        return session;
+      }
       if (session.user) {
         session.user.id = String(token.id);
         session.user.role = token.role as Role;

@@ -404,17 +404,17 @@ export default function AdminApprovalsPage() {
 
                               {bizOpen && (
                                 <div className="border-t border-line bg-sand/10 px-3 py-3">
-                                  {!b.isApproved && (
-                                    <div className="mb-4">
-                                      <AdminProviderSubmission
-                                        business={b}
-                                        owner={{
-                                          name: o.ownerName,
-                                          email: o.ownerEmail,
-                                          phone: o.ownerPhone,
-                                        }}
-                                        detailHref={`/admin/providers/${b.id}?from=pending`}
-                                        actions={
+                                  <div className="mb-4">
+                                    <AdminProviderSubmission
+                                      business={b}
+                                      owner={{
+                                        name: o.ownerName,
+                                        email: o.ownerEmail,
+                                        phone: o.ownerPhone,
+                                      }}
+                                      detailHref={`/admin/providers/${b.id}?from=pending`}
+                                      actions={
+                                        !b.isApproved ? (
                                           <div className="flex flex-wrap items-center gap-3">
                                             <label className="flex items-center gap-1.5 text-sm text-ink">
                                               Commission
@@ -458,10 +458,10 @@ export default function AdminApprovalsPage() {
                                               Decline
                                             </button>
                                           </div>
-                                        }
-                                      />
-                                    </div>
-                                  )}
+                                        ) : undefined
+                                      }
+                                    />
+                                  </div>
                                   <div className="border-t border-line pt-3">
                                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                       Pending listings

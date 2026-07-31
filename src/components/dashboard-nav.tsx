@@ -196,6 +196,7 @@ export function DashboardNav({
             <Link
               key={leaf.href}
               href={leaf.href}
+              prefetch={false}
               aria-current={active ? "page" : undefined}
               title={leaf.label}
               className="role-nav-link flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition"
@@ -279,6 +280,7 @@ function NavLeafRow({ leaf, pathname }: { leaf: NavLeaf; pathname: string }) {
   return (
     <Link
       href={leaf.href}
+      prefetch={false}
       aria-current={active ? "page" : undefined}
       title={leaf.label}
       className={`${leafClasses(active)} role-nav-link`}
@@ -362,6 +364,7 @@ function NavGroupRow({
               <Link
                 key={child.href}
                 href={child.href}
+                prefetch={false}
                 aria-current={active ? "page" : undefined}
                 className="role-nav-link flex items-center gap-2 rounded-md px-3 py-2 text-sm transition"
                 style={leafStyle(active)}

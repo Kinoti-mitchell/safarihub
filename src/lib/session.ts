@@ -29,15 +29,13 @@ export async function requirePermission(permission: Permission) {
 }
 
 /**
- * Admin console APIs: caller must have base role ADMIN and the permission.
- * Built-in admins always pass the permission check.
+ * Admin console APIs: caller must have base role ADMIN.
+ * All admins have full rights — permission argument is kept for call-site
+ * clarity / future audit, but is not used to deny access.
  */
-export async function requireAdminPermission(permission: Permission) {
+export async function requireAdminPermission(_permission: Permission) {
   const user = await requireUser();
   if (user.role !== "ADMIN") {
-    throw new Error("FORBIDDEN");
-  }
-  if (!(await userHasPermission(user, permission))) {
     throw new Error("FORBIDDEN");
   }
   return user;

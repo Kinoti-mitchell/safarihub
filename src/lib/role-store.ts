@@ -136,21 +136,22 @@ function toRoleView(row: RoleRow): RoleDefinitionView {
 }
 
 /**
- * Runtime permission check. Built-in admins always pass. Everyone else is
- * checked against RoleDefinition (roleKey, then role), with static defaults
- * as fallback when the definition is missing.
+ * Runtime permission check. Every ADMIN always passes (full rights).
+ * Everyone else is checked against RoleDefinition (roleKey, then role),
+ * with static defaults as fallback when the definition is missing.
  */
 export async function userHasPermission(
   user: PermissionUser,
   permission: Permission,
 ): Promise<boolean> {
-  if (isBuiltInAdmin(user)) return true;
+  // All platform admins have every permission — never gate on roleKey matrix.
+  if (user.role === "ADMIN" || isBuiltInAdmin(user)) return true;
 
   const key = user.roleKey || user.role;
   try {
     const def = await getRoleDefinition(key);
     if (def) {
-      if (def.key === "ADMIN") return true;
+      if (def.key === "ADMIN" || def.baseRole === "ADMIN") return true;
       return def.permissions.includes(permission);
     }
   } catch {

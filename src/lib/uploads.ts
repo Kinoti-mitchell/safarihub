@@ -19,7 +19,12 @@ async function storePublicFile(opts: {
   defaultName: string;
 }) {
   const safeFolder =
-    opts.folder.replace(/[^a-z0-9-]/gi, "").slice(0, 40) || "misc";
+    opts.folder
+      .split("/")
+      .map((seg) => seg.replace(/[^a-z0-9-]/gi, "").slice(0, 32))
+      .filter(Boolean)
+      .join("/")
+      .slice(0, 80) || "misc";
   const safeName =
     opts.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) ||
     opts.defaultName;
@@ -50,7 +55,7 @@ async function storePublicFile(opts: {
   }
 
   const bytes = Buffer.from(await opts.file.arrayBuffer());
-  const dir = path.join(process.cwd(), "public", "uploads", safeFolder);
+  const dir = path.join(process.cwd(), "public", "uploads", ...safeFolder.split("/"));
   await mkdir(dir, { recursive: true });
   const localName = `${Date.now()}-${safeName}`;
   await writeFile(path.join(dir, localName), bytes);

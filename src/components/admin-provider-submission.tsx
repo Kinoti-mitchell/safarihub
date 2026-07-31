@@ -76,22 +76,62 @@ function fmtDateTime(value?: string | null) {
   }
 }
 
-function DocLink({ label, url }: { label: string; url?: string | null }) {
+function adminDocHref(url: string) {
+  return `/api/admin/documents/view?url=${encodeURIComponent(url)}`;
+}
+
+function isImageDoc(url: string) {
+  return /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(url);
+}
+
+function isPdfDoc(url: string) {
+  return /\.pdf(\?|#|$)/i.test(url);
+}
+
+function DocCard({ label, url }: { label: string; url?: string | null }) {
+  if (!url) {
+    return (
+      <li className="flex flex-col rounded-lg border border-dashed border-red-200 bg-red-50/60 p-3">
+        <p className="text-sm font-medium text-ink">{label}</p>
+        <p className="mt-1 text-xs text-red-700">Not uploaded</p>
+      </li>
+    );
+  }
+
+  const viewHref = adminDocHref(url);
+  const image = isImageDoc(url);
+  const pdf = isPdfDoc(url);
+
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-white px-3 py-2 text-sm">
-      <span className="text-ink">{label}</span>
-      {url ? (
+    <li className="flex flex-col overflow-hidden rounded-lg border border-line bg-white">
+      <div className="relative flex h-40 items-center justify-center bg-sand/40">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={viewHref}
+            alt={label}
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <div className="px-3 text-center">
+            <p className="text-2xl font-semibold text-ink-muted">
+              {pdf ? "PDF" : "FILE"}
+            </p>
+            <p className="mt-1 text-xs text-ink-muted">Preview in new tab</p>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2">
+        <p className="text-sm font-medium text-ink">{label}</p>
         <a
-          href={url}
+          href={viewHref}
           target="_blank"
           rel="noreferrer"
-          className="font-medium text-lake-bright underline underline-offset-2"
+          className="rounded-md bg-lake px-2.5 py-1 text-xs font-semibold text-sand"
         >
-          Open
+          View
         </a>
-      ) : (
-        <span className="text-red-700">Missing</span>
-      )}
+      </div>
     </li>
   );
 }
@@ -136,7 +176,7 @@ export function AdminProviderSubmission({
   const amenities = Array.isArray(business.amenities) ? business.amenities : [];
   const directors = Array.isArray(business.directors) ? business.directors : [];
   const otherDocs = Array.isArray(business.otherDocsUrls)
-    ? business.otherDocsUrls
+    ? business.otherDocsUrls.filter(Boolean)
     : [];
   const hours =
     business.opensAt || business.closesAt
@@ -145,6 +185,36 @@ export function AdminProviderSubmission({
   const place = [business.townName, business.countyName]
     .filter(Boolean)
     .join(", ");
+
+  const docs: Array<{ label: string; url?: string | null }> = [
+    { label: "Owner national ID", url: business.ownerIdDocUrl },
+    { label: "Selfie holding ID", url: business.selfieDocUrl },
+    { label: "KRA PIN document", url: business.kraPinDocUrl },
+    {
+      label: "Certificate of incorporation",
+      url: business.registrationCertUrl,
+    },
+    {
+      label: "Business permit / tourism licence",
+      url: business.businessPermitUrl,
+    },
+    { label: "CR12 / supporting KYC", url: business.kycDocUrl },
+    ...otherDocs.map((url, i) => ({
+      label: `Other document ${i + 1}`,
+      url,
+    })),
+  ].filter((d) => {
+    // Always show core identity docs; hide empty company-only slots for sole traders.
+    if (
+      !isCompany &&
+      (d.label === "Certificate of incorporation" ||
+        d.label === "CR12 / supporting KYC") &&
+      !d.url
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -172,6 +242,23 @@ export function AdminProviderSubmission({
           Previous rejection: {business.rejectionReason}
         </p>
       )}
+
+      <section className="rounded-lg border border-lake/25 bg-white p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            Uploaded documents
+          </h4>
+          <p className="text-xs text-ink-muted">
+            {docs.filter((d) => d.url).length} of {docs.length} on file — open
+            to review before approving
+          </p>
+        </div>
+        <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {docs.map((d) => (
+            <DocCard key={d.label} label={d.label} url={d.url} />
+          ))}
+        </ul>
+      </section>
 
       <section className="rounded-lg border border-line bg-white p-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
@@ -319,33 +406,6 @@ export function AdminProviderSubmission({
           </ul>
         </section>
       )}
-
-      <section className="rounded-lg border border-line bg-white p-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          Documents
-        </h4>
-        <ul className="mt-3 space-y-2">
-          <DocLink label="Owner national ID" url={business.ownerIdDocUrl} />
-          <DocLink label="Selfie holding ID" url={business.selfieDocUrl} />
-          <DocLink label="KRA PIN document" url={business.kraPinDocUrl} />
-          {isCompany && (
-            <DocLink
-              label="Certificate of incorporation"
-              url={business.registrationCertUrl}
-            />
-          )}
-          <DocLink
-            label="Business permit / tourism licence"
-            url={business.businessPermitUrl}
-          />
-          {isCompany && (
-            <DocLink label="CR12 / supporting" url={business.kycDocUrl} />
-          )}
-          {otherDocs.map((url, i) => (
-            <DocLink key={url} label={`Other document ${i + 1}`} url={url} />
-          ))}
-        </ul>
-      </section>
 
       <section className="rounded-lg border border-line bg-white p-3">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">

@@ -76,10 +76,19 @@ export function ProfileForm() {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("folder", "avatars");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const body = await res.json();
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        pushToast(body.error || "Upload failed", "error");
+        pushToast(
+          res.status === 401
+            ? "Session expired — sign in again, then retry"
+            : body.error || "Upload failed",
+          "error",
+        );
         return;
       }
       setImage(body.url);

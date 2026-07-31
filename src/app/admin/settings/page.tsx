@@ -363,10 +363,18 @@ function ImageField({
       const fd = new FormData();
       fd.append("file", file);
       fd.append("folder", "branding");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const body = await res.json();
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErr(body.error || "Upload failed");
+        setErr(
+          res.status === 401
+            ? "Session expired — sign in again, then retry"
+            : body.error || "Upload failed",
+        );
         return;
       }
       onChange(body.url);
