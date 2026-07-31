@@ -3,8 +3,8 @@
 Localized hospitality operating system.  
 Stack: **Next.js (PWA) + Supabase PostgreSQL** (SQL schema — not Prisma migrations).
 
-**Live app (full project on Render):** https://safari-hub.onrender.com/  
-**GitHub Pages:** https://kinoti-mitchell.github.io/safarihub/ (redirects to Render)  
+**Live app (Vercel):** https://safari-hub-beta.vercel.app/  
+**GitHub Pages:** https://kinoti-mitchell.github.io/safarihub/ (redirects to Vercel)  
 **User manual:** [USER_MANUAL.md](./USER_MANUAL.md) — travellers, operators, and admins.
 
 ## What it does

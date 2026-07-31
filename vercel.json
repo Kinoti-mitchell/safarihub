@@ -1,6 +1,18 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "buildCommand": "npm run build",
-  "installCommand": "npm ci"
+  "services": {
+    "safari-hub": {
+      "root": ".",
+      "framework": "nextjs",
+      "buildCommand": "npm ci --include=dev && npm run build"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "safari-hub"
+      }
+    }
+  ]
 }
