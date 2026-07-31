@@ -113,7 +113,7 @@ export async function POST(request: Request, { params }: Params) {
     }
     if (listing.status !== "PUBLISHED") {
       return jsonError(
-        "Boost is only available after your listing is approved and published",
+        "Boost is only available after your listing is live (publish fee paid)",
         400,
       );
     }

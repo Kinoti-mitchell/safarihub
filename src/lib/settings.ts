@@ -79,10 +79,35 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     ],
   },
   {
+    id: "listingPublish",
+    label: "Listing publish fee",
+    description:
+      "Providers pay once per listing to go live. Admins only approve businesses — not each listing’s content. Set fee to 0 for free publish.",
+    fields: [
+      {
+        key: "listing.publishFeeKes",
+        label: "Publish fee",
+        type: "number",
+        default: 500,
+        prefix: "KES",
+        min: 0,
+        help: "0 = listing goes live immediately when complete. Above 0 = provider pays via M-Pesa, then admin confirms payment to publish.",
+      },
+      {
+        key: "listing.publishPaymentInstructions",
+        label: "Payment instructions",
+        type: "textarea",
+        default:
+          "Pay the listing publish fee via M-Pesa to the Safari Hub paybill/till, then paste your M-Pesa confirmation code. Your listing goes live after payment is verified.",
+        help: "Shown to providers on the listing publish step.",
+      },
+    ],
+  },
+  {
     id: "boost",
     label: "Listing boosts",
     description:
-      "Paid catalog promotion. Rates per period are managed under Admin → Boosts. Providers can only request a boost after a listing is published.",
+      "Paid catalog promotion. Rates per period are managed under Admin → Boosts. Providers can only request a boost after a listing is live.",
     fields: [
       {
         key: "boost.enabled",
@@ -195,7 +220,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { key: "flags.reviewsEnabled", label: "Reviews", type: "boolean", default: true },
       { key: "flags.inquiriesEnabled", label: "Inquiries / leads", type: "boolean", default: true },
       { key: "flags.loyaltyEnabled", label: "Loyalty points", type: "boolean", default: true },
-      { key: "flags.requireListingApproval", label: "Require listing approval", type: "boolean", default: true, help: "When off, complete provider listings publish immediately." },
+      { key: "flags.requireListingApproval", label: "Legacy: admin review each listing", type: "boolean", default: false, help: "Keep OFF. Business approval + publish fee is the normal path. When ON, listings wait for content review instead of pay-to-publish." },
       { key: "flags.autoApproveProviders", label: "Hard-gate auto-approve providers", type: "boolean", default: false, help: "When on, new providers are approved only if every hard check passes (OTP, docs, KRA, permit expiry, M-Pesa, map, no duplicates). Otherwise they stay in the admin queue." },
       { key: "flags.suppliersEnabled", label: "Supplier marketplace", type: "boolean", default: true },
       { key: "flags.staffingEnabled", label: "Provider staffing invites", type: "boolean", default: true },

@@ -23,6 +23,10 @@ type RawListing = {
   createdAt: string;
   featured: boolean;
   isPromoted: boolean;
+  publishFeeKes: number | null;
+  publishPaymentRef: string | null;
+  publishPaymentNote: string | null;
+  publishPaymentStatus: string | null;
   county: { name: string } | null;
   town: { name: string } | null;
   media: Array<{
@@ -51,6 +55,10 @@ function mapListing(l: RawListing) {
     createdAt: l.createdAt,
     featured: l.featured,
     isPromoted: l.isPromoted,
+    publishFeeKes: l.publishFeeKes ?? null,
+    publishPaymentRef: l.publishPaymentRef ?? null,
+    publishPaymentNote: l.publishPaymentNote ?? null,
+    publishPaymentStatus: l.publishPaymentStatus ?? null,
     county: l.county,
     town: l.town,
     photoCount: l.media.length,
@@ -106,6 +114,7 @@ const PROVIDER_SELECT = `
   listings:Listing(
     id, title, category, status, description, address, createdAt,
     featured, isPromoted,
+    publishFeeKes, publishPaymentRef, publishPaymentNote, publishPaymentStatus,
     county:County(name), town:Town(name),
     media:Media(id, url, isCover, sortOrder),
     roomTypes:RoomType(id, name, basePrice, quantity)

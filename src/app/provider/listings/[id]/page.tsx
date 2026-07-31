@@ -73,7 +73,7 @@ const SETUP_STEPS = [
     blurb: "Rooms, tables, passes, tickets at this place",
   },
   { key: "location", title: "Map pin", blurb: "GPS pin for directions" },
-  { key: "submit", title: "Preview", blurb: "Check everything, then submit" },
+  { key: "submit", title: "Preview", blurb: "Check everything, then publish" },
 ] as const;
 
 /** First incomplete setup step — skips redoing basics already captured on create. */
@@ -169,6 +169,11 @@ export default function ProviderListingDetailPage({
   const [boostPaymentNote, setBoostPaymentNote] = useState("");
   const [boostEndsAt, setBoostEndsAt] = useState<string | null>(null);
   const [boostIsPromoted, setBoostIsPromoted] = useState(false);
+  const [publishFeeKes, setPublishFeeKes] = useState(0);
+  const [publishInstructions, setPublishInstructions] = useState("");
+  const [publishPaybill, setPublishPaybill] = useState("");
+  const [publishPaymentRef, setPublishPaymentRef] = useState("");
+  const [publishPaymentNote, setPublishPaymentNote] = useState("");
 
   async function load(opts?: { initStep?: boolean }) {
     const res = await fetch(`/api/listings/${id}`);
@@ -179,6 +184,14 @@ export default function ProviderListingDetailPage({
     }
     setListing(data.listing);
     setCompleteness(data.completeness);
+    if (data.publish) {
+      setPublishFeeKes(Number(data.publish.feeKes) || 0);
+      setPublishInstructions(data.publish.paymentInstructions || "");
+      setPublishPaybill(data.publish.paybill || "");
+    }
+    if (data.listing?.publishPaymentRef) {
+      setPublishPaymentRef(String(data.listing.publishPaymentRef));
+    }
     setAmenities(
       Array.isArray(data.listing?.amenities) ? data.listing.amenities : [],
     );
@@ -734,21 +747,36 @@ export default function ProviderListingDetailPage({
   }
 
   async function submitPublish() {
+    if (publishFeeKes > 0 && publishPaymentRef.trim().length < 4) {
+      setError("Enter your M-Pesa confirmation code after paying the publish fee");
+      return;
+    }
     setBusy("publish");
     setError(null);
     try {
       const res = await fetch(`/api/listings/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "PENDING_REVIEW" }),
+        body: JSON.stringify({
+          status: "PENDING_REVIEW",
+          paymentRef:
+            publishFeeKes > 0 ? publishPaymentRef.trim() : undefined,
+          paymentNote:
+            publishFeeKes > 0
+              ? publishPaymentNote.trim() || undefined
+              : undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "Could not submit for review");
+        setError(data.error || "Could not publish listing");
         return;
       }
+      const nextStatus = data.listing?.status;
       flash(
-        "Submitted for admin review — your listing will not go live until an admin approves it",
+        nextStatus === "PUBLISHED"
+          ? "Your listing is live"
+          : "Payment submitted — your listing goes live after payment is verified",
       );
       await load();
     } catch {
@@ -2166,6 +2194,49 @@ export default function ProviderListingDetailPage({
           )}
         </div>
 
+        {listing.status !== "PUBLISHED" && publishFeeKes > 0 && (
+          <div className="mt-6 space-y-3 rounded-lg border border-line bg-sand/20 p-4">
+            <p className="text-sm font-semibold text-ink">
+              Publish fee · KES {publishFeeKes.toLocaleString()}
+            </p>
+            {publishPaybill && (
+              <p className="text-sm text-ink-muted">
+                Paybill / till:{" "}
+                <span className="font-mono font-medium text-ink">
+                  {publishPaybill}
+                </span>
+              </p>
+            )}
+            {publishInstructions && (
+              <p className="text-sm text-ink-muted whitespace-pre-wrap">
+                {publishInstructions}
+              </p>
+            )}
+            <label className="block text-sm">
+              <span className="font-medium text-ink">
+                M-Pesa confirmation code
+              </span>
+              <input
+                value={publishPaymentRef}
+                onChange={(e) => setPublishPaymentRef(e.target.value)}
+                disabled={disabled || listing.status === "PENDING_REVIEW"}
+                placeholder="e.g. QGH7… or Till receipt"
+                className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-ink-muted">Note (optional)</span>
+              <input
+                value={publishPaymentNote}
+                onChange={(e) => setPublishPaymentNote(e.target.value)}
+                disabled={disabled || listing.status === "PENDING_REVIEW"}
+                placeholder="Amount paid, phone used…"
+                className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+        )}
+
         <div className="mt-6 flex flex-wrap gap-2">
           <button
             type="button"
@@ -2176,16 +2247,22 @@ export default function ProviderListingDetailPage({
             {busy === "publish"
               ? "Working…"
               : listing.status === "PENDING_REVIEW"
-                ? "Awaiting admin approval"
+                ? "Awaiting payment verification"
                 : listing.status === "PUBLISHED"
-                  ? "Live — re-submit changes for review"
-                  : "Looks good — submit for review"}
+                  ? "Live"
+                  : publishFeeKes > 0
+                    ? "Pay & publish"
+                    : "Publish listing"}
           </button>
         </div>
         <p className="mt-4 text-xs text-ink-muted">
           {listing.status === "PUBLISHED"
-            ? "Your listing is live. Request a paid boost above after paying the boost fee."
-            : "Guests will not see this listing until an admin approves it. Boost is available only after it is published."}
+            ? "Your listing is live. Optional: request a paid boost above to feature it."
+            : listing.status === "PENDING_REVIEW"
+              ? "Payment received for verification — guests will see this listing once confirmed."
+              : publishFeeKes > 0
+                ? "Pay the publish fee, paste your M-Pesa code, then submit. Your business must already be approved."
+                : "When the checklist is complete, publish to go live immediately."}
         </p>
       </section>
       )}

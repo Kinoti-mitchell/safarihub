@@ -16,6 +16,10 @@ type PendingListing = {
   createdAt: string;
   featured: boolean;
   isPromoted: boolean;
+  publishFeeKes: number | null;
+  publishPaymentRef: string | null;
+  publishPaymentNote: string | null;
+  publishPaymentStatus: string | null;
   county: { name: string } | null;
   town: { name: string } | null;
   photoCount: number;
@@ -183,6 +187,28 @@ export default function AdminApprovalsPage() {
     }
   }
 
+  async function confirmPublishPayment(l: PendingListing) {
+    setActionBusy(l.id, true);
+    try {
+      const res = await fetch(`/api/admin/listings/${l.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "PUBLISHED" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pushToast(body.error || "Could not publish listing", "error");
+        return;
+      }
+      pushToast(`${l.title} is live`, "success");
+      await load();
+    } catch {
+      pushToast("Network error — please try again", "error");
+    } finally {
+      setActionBusy(l.id, false);
+    }
+  }
+
   async function rejectBusiness(b: PendingBusiness) {
     const reason = window.prompt(
       "Decline reason (shown to the provider):",
@@ -240,9 +266,13 @@ export default function AdminApprovalsPage() {
         <p className="mt-1 text-sm text-ink-muted">
           {loaded
             ? pendingTotal > 0
-              ? `${summary.owners} owner${summary.owners === 1 ? "" : "s"} · ${summary.businesses} business${summary.businesses === 1 ? "" : "es"} · ${summary.listings} listing${summary.listings === 1 ? "" : "s"} waiting`
+              ? `${summary.businesses} business${summary.businesses === 1 ? "" : "es"} to approve · ${summary.listings} listing${summary.listings === 1 ? "" : "s"} awaiting publish payment`
               : "Queue is clear — nothing pending"
             : "Loading…"}
+        </p>
+        <p className="mt-2 max-w-2xl text-xs text-ink-muted">
+          Approve businesses (KYC). Listings go live after publish payment is
+          verified — you no longer review listing content.
         </p>
       </div>
 
@@ -464,108 +494,87 @@ export default function AdminApprovalsPage() {
                                   </div>
                                   <div className="border-t border-line pt-3">
                                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                                      Pending listings
+                                      Awaiting publish payment
                                     </p>
-                                  {b.pendingListings.length === 0 ? (
-                                    <p className="py-2 text-center text-sm text-ink-muted">
-                                      {b.isApproved
-                                        ? "No listings pending review."
-                                        : "No listings submitted for review yet — approve the business so they can publish."}
-                                    </p>
-                                  ) : (
-                                    <ul className="space-y-3">
-                                      {b.pendingListings.map((l) => {
-                                        const incomplete =
-                                          l.photoCount === 0 || !l.fromPrice;
-                                        const place = [
-                                          l.town?.name,
-                                          l.county?.name,
-                                        ]
-                                          .filter(Boolean)
-                                          .join(", ");
-                                        return (
-                                          <li key={l.id}>
-                                            <Link
-                                              href={`/admin/listings/${l.id}?from=pending`}
-                                              className="group flex gap-3 rounded-lg border border-line bg-white p-3 transition hover:border-lake-bright hover:shadow-md"
+                                    {b.pendingListings.length === 0 ? (
+                                      <p className="py-2 text-center text-sm text-ink-muted">
+                                        {b.isApproved
+                                          ? "No listings waiting on publish payment."
+                                          : "Approve this business first — then they can pay to publish listings."}
+                                      </p>
+                                    ) : (
+                                      <ul className="space-y-3">
+                                        {b.pendingListings.map((l) => {
+                                          const place = [
+                                            l.town?.name,
+                                            l.county?.name,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(", ");
+                                          const fee =
+                                            l.publishFeeKes != null
+                                              ? `KES ${l.publishFeeKes.toLocaleString()}`
+                                              : "fee";
+                                          return (
+                                            <li
+                                              key={l.id}
+                                              className="rounded-lg border border-line bg-white p-3"
                                             >
-                                              <div className="h-20 w-24 shrink-0 overflow-hidden rounded-md bg-sand">
-                                                {l.coverUrl ? (
-                                                  // eslint-disable-next-line @next/next/no-img-element
-                                                  <img
-                                                    src={l.coverUrl}
-                                                    alt=""
-                                                    className="h-full w-full object-cover"
-                                                  />
-                                                ) : (
-                                                  <div className="flex h-full items-center justify-center text-[0.65rem] text-ink-muted">
-                                                    No photo
-                                                  </div>
-                                                )}
+                                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                                <div className="min-w-0 flex-1">
+                                                  <p className="font-medium text-ink">
+                                                    {l.title}
+                                                  </p>
+                                                  <p className="mt-0.5 text-sm text-ink-muted">
+                                                    {place || "No location"} ·{" "}
+                                                    {l.category.toLowerCase()} ·{" "}
+                                                    {fee}
+                                                  </p>
+                                                  {l.publishPaymentRef ? (
+                                                    <p className="mt-2 rounded-md bg-sand/50 px-2 py-1.5 font-mono text-sm text-ink">
+                                                      M-Pesa ref:{" "}
+                                                      {l.publishPaymentRef}
+                                                    </p>
+                                                  ) : (
+                                                    <p className="mt-2 text-xs text-amber-700">
+                                                      No payment reference yet
+                                                    </p>
+                                                  )}
+                                                  {l.publishPaymentNote && (
+                                                    <p className="mt-1 text-xs text-ink-muted">
+                                                      Note:{" "}
+                                                      {l.publishPaymentNote}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                  <button
+                                                    type="button"
+                                                    disabled={busy.has(l.id)}
+                                                    onClick={() =>
+                                                      void confirmPublishPayment(
+                                                        l,
+                                                      )
+                                                    }
+                                                    className="rounded-md bg-lake px-3 py-1.5 text-sm font-semibold text-sand disabled:opacity-50"
+                                                  >
+                                                    {busy.has(l.id)
+                                                      ? "Working…"
+                                                      : "Confirm payment & go live"}
+                                                  </button>
+                                                  <Link
+                                                    href={`/admin/listings/${l.id}?from=pending`}
+                                                    className="rounded-md border border-line px-3 py-1.5 text-sm text-ink-muted"
+                                                  >
+                                                    Open
+                                                  </Link>
+                                                </div>
                                               </div>
-                                              <div className="min-w-0 flex-1">
-                                                <p className="font-medium text-ink group-hover:text-lake">
-                                                  {l.title}
-                                                </p>
-                                                <p className="mt-0.5 text-sm text-ink-muted">
-                                                  {place || "No location"} ·{" "}
-                                                  {l.category.toLowerCase()}
-                                                  {l.offerCount
-                                                    ? ` · ${l.offerCount} offer${l.offerCount === 1 ? "" : "s"}`
-                                                    : ""}
-                                                </p>
-                                                {l.address && (
-                                                  <p className="mt-0.5 truncate text-xs text-ink-muted">
-                                                    {l.address}
-                                                  </p>
-                                                )}
-                                                {l.description && (
-                                                  <p className="mt-1 line-clamp-2 text-xs text-ink-muted">
-                                                    {l.description}
-                                                  </p>
-                                                )}
-                                                <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-ink-muted">
-                                                  <span>
-                                                    {l.photoCount} photo
-                                                    {l.photoCount === 1
-                                                      ? ""
-                                                      : "s"}
-                                                  </span>
-                                                  <span>
-                                                    {l.fromPrice
-                                                      ? `from KES ${l.fromPrice.toLocaleString()}`
-                                                      : "no price set"}
-                                                  </span>
-                                                  <span>
-                                                    submitted{" "}
-                                                    {daysAgo(l.createdAt)}
-                                                  </span>
-                                                </p>
-                                                {incomplete && (
-                                                  <p className="mt-1 text-xs text-amber-700">
-                                                    Incomplete —
-                                                    {l.photoCount === 0
-                                                      ? " missing photos"
-                                                      : ""}
-                                                    {l.photoCount === 0 &&
-                                                    !l.fromPrice
-                                                      ? " and"
-                                                      : ""}
-                                                    {!l.fromPrice
-                                                      ? " no price"
-                                                      : ""}
-                                                  </p>
-                                                )}
-                                              </div>
-                                              <span className="shrink-0 self-center rounded-md bg-lake px-3 py-1.5 text-sm font-medium text-sand transition group-hover:bg-lake-bright">
-                                                Review →
-                                              </span>
-                                            </Link>
-                                          </li>
-                                        );
-                                      })}
-                                    </ul>
-                                  )}
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    )}
                                   </div>
                                 </div>
                               )}

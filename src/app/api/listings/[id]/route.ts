@@ -6,7 +6,11 @@ import {
   findListingByIdOrSlug,
   listingCompleteness,
 } from "@/lib/listing";
-import { getPlatformSettings, boolSetting } from "@/lib/settings";
+import {
+  getPlatformSettings,
+  boolSetting,
+  numberSetting,
+} from "@/lib/settings";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import {
   normalizeAmenities,
@@ -40,9 +44,25 @@ export async function GET(request: Request, { params }: Params) {
       }
     }
 
+    const settings = await getPlatformSettings();
+    const publishFeeKes = numberSetting(settings, "listing.publishFeeKes");
+    const publishPaymentInstructions = String(
+      settings["listing.publishPaymentInstructions"] || "",
+    );
+    const paybill = String(settings["payments.mpesaPaybill"] || "");
+
     return jsonOk({
       listing,
       completeness: listingCompleteness(listing),
+      publish: {
+        feeKes: publishFeeKes,
+        paymentInstructions: publishPaymentInstructions,
+        paybill,
+        requireListingApproval: boolSetting(
+          settings,
+          "flags.requireListingApproval",
+        ),
+      },
     });
   } catch (error) {
     return handleRouteError(error);
@@ -75,6 +95,9 @@ const patchSchema = z.object({
   website: z.string().max(300).optional().nullable(),
   menuUrl: z.string().max(500).optional().nullable(),
   openingHours: z.string().max(500).optional().nullable(),
+  /** M-Pesa confirmation for pay-to-publish */
+  paymentRef: z.string().min(4).max(80).optional(),
+  paymentNote: z.string().max(500).optional(),
 });
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -137,11 +160,16 @@ export async function PATCH(request: Request, { params }: Params) {
       delete body.isPromoted;
     }
 
-    // Only admins can publish or suspend — every new listing needs admin approval
+    const patch = { ...body } as Record<string, unknown>;
+    delete patch.paymentRef;
+    delete patch.paymentNote;
+
+    // Providers cannot force-publish or suspend. Publish happens via
+    // pay-to-publish (or free publish when fee is 0), or legacy review flag.
     if (!isAdmin) {
       if (body.status === "PUBLISHED" || body.status === "SUSPENDED") {
         return jsonError(
-          "Only an admin can publish or suspend listings",
+          "Listings go live after publish payment (or instantly when the fee is 0). Admins can suspend listings.",
           403,
         );
       }
@@ -161,20 +189,44 @@ export async function PATCH(request: Request, { params }: Params) {
         });
         if (!completeness.complete) {
           return jsonError(
-            "Complete the checklist (description, photo, at least one offer/price, and map pin if this is a place/venue) before submitting for admin review",
+            "Complete the checklist (description, photo, at least one offer/price, and map pin if this is a place/venue) before publishing",
             400,
           );
         }
-        // When admin approval is required, queue for review; otherwise a
-        // complete listing publishes immediately (controlled in Settings).
+
         const settings = await getPlatformSettings();
-        body.status = boolSetting(settings, "flags.requireListingApproval")
-          ? "PENDING_REVIEW"
-          : "PUBLISHED";
+        const legacyReview = boolSetting(
+          settings,
+          "flags.requireListingApproval",
+        );
+        const feeKes = numberSetting(settings, "listing.publishFeeKes");
+
+        if (legacyReview) {
+          patch.status = "PENDING_REVIEW";
+          patch.publishPaymentStatus = "NONE";
+        } else if (feeKes > 0) {
+          const ref = body.paymentRef?.trim();
+          if (!ref) {
+            return jsonError(
+              "Enter your M-Pesa confirmation code to publish this listing",
+              400,
+            );
+          }
+          patch.status = "PENDING_REVIEW";
+          patch.publishFeeKes = feeKes;
+          patch.publishPaymentRef = ref;
+          patch.publishPaymentNote = body.paymentNote?.trim() || null;
+          patch.publishPaymentStatus = "PENDING_VERIFY";
+          patch.publishPaidAt = null;
+        } else {
+          patch.status = "PUBLISHED";
+          patch.publishFeeKes = 0;
+          patch.publishPaymentStatus = "WAIVED";
+          patch.publishPaidAt = new Date().toISOString();
+        }
       }
     }
 
-    const patch = { ...body } as Record<string, unknown>;
     if (body.amenities != null) {
       patch.amenities = normalizeAmenities(body.amenities);
     }

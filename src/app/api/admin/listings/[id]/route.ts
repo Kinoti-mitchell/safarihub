@@ -92,6 +92,15 @@ export async function PATCH(request: Request, { params }: Params) {
     delete updatePayload.featured;
     delete updatePayload.featurePeriod;
 
+    // Confirming publish also marks the publish fee as paid (pay-to-publish).
+    if (rest.status === "PUBLISHED") {
+      updatePayload.publishPaymentStatus = "PAID";
+      updatePayload.publishPaidAt = new Date().toISOString();
+    }
+    if (rest.status === "DRAFT") {
+      updatePayload.publishPaymentStatus = "REJECTED";
+    }
+
     const { data: listing, error } = await db
       .from("Listing")
       .update(updatePayload)
@@ -114,9 +123,9 @@ export async function PATCH(request: Request, { params }: Params) {
                 : "listing.update";
     const baseSummary =
       rest.status === "PUBLISHED"
-        ? `Published "${listing.title}"${featured ? " (featured)" : ""}`
+        ? `Confirmed publish payment & published "${listing.title}"${featured ? " (featured)" : ""}`
         : rest.status === "DRAFT"
-          ? `Sent "${listing.title}" back for changes`
+          ? `Sent "${listing.title}" back (payment rejected / changes needed)`
           : rest.status === "SUSPENDED"
             ? `Suspended "${listing.title}"`
             : featured === true && featurePeriod

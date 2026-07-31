@@ -43,6 +43,10 @@ type Listing = {
   featuredEndsAt?: string | null;
   isPromoted: boolean;
   boostEndsAt?: string | null;
+  publishFeeKes?: number | null;
+  publishPaymentRef?: string | null;
+  publishPaymentNote?: string | null;
+  publishPaymentStatus?: string | null;
   acceptMpesa: boolean;
   acceptCard: boolean;
   acceptCashOnArrival: boolean;
@@ -509,8 +513,37 @@ function AdminListingDetailInner() {
             {/* Review actions */}
             <div className="rounded-xl border border-line bg-white/70 p-4">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-muted">
-                Review &amp; actions
+                Publish payment &amp; actions
               </h2>
+              {(listing.publishPaymentRef ||
+                listing.publishFeeKes != null ||
+                listing.publishPaymentStatus) && (
+                <div className="mt-2 rounded-md border border-line bg-sand/30 px-3 py-2 text-sm">
+                  {listing.publishFeeKes != null && (
+                    <p>
+                      Fee:{" "}
+                      <span className="font-medium">
+                        KES {Number(listing.publishFeeKes).toLocaleString()}
+                      </span>
+                    </p>
+                  )}
+                  {listing.publishPaymentRef && (
+                    <p className="mt-1 font-mono">
+                      Ref: {listing.publishPaymentRef}
+                    </p>
+                  )}
+                  {listing.publishPaymentNote && (
+                    <p className="mt-1 text-ink-muted">
+                      Note: {listing.publishPaymentNote}
+                    </p>
+                  )}
+                  {listing.publishPaymentStatus && (
+                    <p className="mt-1 text-xs uppercase tracking-wide text-ink-muted">
+                      {listing.publishPaymentStatus.replace(/_/g, " ")}
+                    </p>
+                  )}
+                </div>
+              )}
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
@@ -526,13 +559,15 @@ function AdminListingDetailInner() {
                     onClick={() =>
                       void act(
                         { status: "PUBLISHED" },
-                        `Published "${listing.title}"`,
+                        `Confirmed payment & published "${listing.title}"`,
                         false,
                       )
                     }
                     className="rounded-lg bg-lake px-4 py-2 text-sm font-semibold text-sand transition hover:bg-lake-bright disabled:opacity-50"
                   >
-                    Approve &amp; publish
+                    {listing.status === "PENDING_REVIEW"
+                      ? "Confirm payment & go live"
+                      : "Publish"}
                   </button>
                 )}
                 {listing.status === "PUBLISHED" && (
