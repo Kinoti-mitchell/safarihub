@@ -3,13 +3,16 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/supabase";
-import { getPlatformSettings, numberSetting } from "@/lib/settings";
 import type { Role } from "@/lib/roles";
 import { normalizePhone, phoneVariants } from "@/lib/identity";
 import { verifyOtp } from "@/lib/otp";
+import { ensureAuthUrl } from "@/lib/auth-url";
 
-// Hard ceiling for the session cookie — the finer-grained, admin-configurable
-// limit (in minutes) is enforced in the jwt callback below.
+ensureAuthUrl();
+
+// Session cookie lifetime (Auth.js JWT maxAge). Keep this the single source of
+// truth — a second absExp kill was causing /api/upload 401s while the admin UI
+// still looked signed in after soft navigation.
 const MAX_SESSION_SECONDS = 24 * 60 * 60;
 
 declare module "next-auth" {
@@ -139,31 +142,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id!;
+        token.sub = user.id!;
         token.role = user.role;
         token.roleKey = user.roleKey ?? null;
-        // Stamp an absolute expiry at login based on the configured minutes.
-        // Floor at 2h so admin console uploads/nav don't die mid-review.
-        const settings = await getPlatformSettings();
-        const configured =
-          numberSetting(settings, "security.sessionMinutes") || 120;
-        const minutes = Math.max(120, configured);
-        token.absExp = Date.now() + minutes * 60_000;
-      }
-      // Enforce the absolute session lifetime — no multi-day sessions.
-      if (token.absExp && Date.now() > Number(token.absExp)) {
-        return null;
       }
       return token;
     },
     async session({ session, token }) {
-      if (!token?.id) {
-        return session;
-      }
-      if (session.user) {
-        session.user.id = String(token.id);
-        session.user.role = token.role as Role;
-        session.user.roleKey = (token.roleKey as string | null) ?? null;
-      }
+      const id = (token.id as string | undefined) || token.sub;
+      if (!id || !session.user) return session;
+      session.user.id = String(id);
+      session.user.role = (token.role as Role) || "TOURIST";
+      session.user.roleKey = (token.roleKey as string | null) ?? null;
       return session;
     },
   },

@@ -1,3 +1,4 @@
+import type { NextAuthRequest } from "next-auth";
 import { auth } from "@/lib/auth";
 import { uploadKycDocument, uploadPublicImage } from "@/lib/uploads";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
@@ -5,10 +6,11 @@ import { ALLOWED_KYC_DOC_TYPES } from "@/lib/supabase";
 
 const ALLOWED_FOLDERS = new Set(["avatars", "branding", "logos", "kyc"]);
 
-export async function POST(request: Request) {
+export const POST = auth(async (req) => {
+  const request = req as NextAuthRequest;
   try {
-    const session = await auth();
-    if (!session?.user) return jsonError("Unauthorized", 401);
+    const session = request.auth;
+    if (!session?.user?.id) return jsonError("Unauthorized", 401);
 
     const contentType = request.headers.get("content-type") || "";
     if (!contentType.includes("multipart/form-data")) {
@@ -82,4 +84,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return handleRouteError(error);
   }
-}
+});
