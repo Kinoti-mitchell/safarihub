@@ -388,9 +388,6 @@ function RegisterForm() {
       const establishedDate = String(
         new FormData(form).get("establishedDate") || "",
       ).trim();
-      const mpesa = String(
-        new FormData(form).get("mpesaTillOrPaybill") || "",
-      ).trim();
       if (!companyEmail.includes("@")) {
         fields.companyEmail = "Enter company email";
       }
@@ -401,10 +398,6 @@ function RegisterForm() {
       if (!establishedDate) {
         fields.establishedDate =
           "Enter the date the business started operating";
-      }
-      if (mpesa.replace(/\D/g, "").length < 5) {
-        fields.mpesaTillOrPaybill =
-          "Enter M-Pesa till or paybill (at least 5 digits)";
       }
       const opensAt = String(new FormData(form).get("opensAt") || "").trim();
       const closesAt = String(new FormData(form).get("closesAt") || "").trim();
@@ -923,7 +916,6 @@ function RegisterForm() {
       companyEmail: String(fd.get("companyEmail") || "").trim(),
       kraPin: String(fd.get("kraPin") || "").trim(),
       businessType: String(fd.get("businessType") || "").trim(),
-      mpesa: String(fd.get("mpesaTillOrPaybill") || "").trim(),
       amenities: amenities.map((a) => amenityLabel(a)),
     };
   }
@@ -1272,7 +1264,6 @@ function RegisterForm() {
                   companyEmail: fieldErrors.companyEmail,
                   kraPin: fieldErrors.kraPin,
                   businessType: fieldErrors.businessType,
-                  mpesaTillOrPaybill: fieldErrors.mpesaTillOrPaybill,
                   establishedDate: fieldErrors.establishedDate,
                   opensAt: fieldErrors.opensAt,
                   closesAt: fieldErrors.closesAt,
@@ -1370,9 +1361,6 @@ function RegisterForm() {
                       <dd className="text-ink-muted">
                         KRA {reviewSummary.kraPin || "—"} ·{" "}
                         {reviewSummary.businessType || "—"}
-                      </dd>
-                      <dd className="text-ink-muted">
-                        M-Pesa {reviewSummary.mpesa || "—"}
                       </dd>
                     </div>
                     <div>

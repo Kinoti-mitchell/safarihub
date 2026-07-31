@@ -428,13 +428,6 @@ export function refineProviderVerification(
       message: "Upload a selfie holding your national ID",
     });
   }
-  if (!data.mpesaTillOrPaybill?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["mpesaTillOrPaybill"],
-      message: "Enter your M-Pesa till or paybill number",
-    });
-  }
   if (!data.businessPermitExpiresAt?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

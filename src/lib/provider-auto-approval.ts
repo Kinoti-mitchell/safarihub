@@ -102,11 +102,6 @@ export function evaluateProviderHardGates(
       detail: kra || undefined,
     },
     {
-      id: "mpesa",
-      label: "M-Pesa till / paybill",
-      ok: Boolean(p.mpesaTillOrPaybill?.trim()),
-    },
-    {
       id: "owner_id",
       label: "Owner ID document",
       ok: hasUrl(p.ownerIdDocUrl),

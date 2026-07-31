@@ -365,10 +365,6 @@ export function AdminProviderSubmission({
         <dl className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field label="KRA PIN" value={business.kraPin} />
           <Field
-            label="M-Pesa till / paybill"
-            value={business.mpesaTillOrPaybill}
-          />
-          <Field
             label="Permit / TRA expiry"
             value={fmtDate(business.businessPermitExpiresAt)}
           />

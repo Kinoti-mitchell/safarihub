@@ -131,7 +131,7 @@ export function ProviderBusinessDetailsSection({
   errors,
 }: {
   kycType: "INDIVIDUAL" | "COMPANY";
-  errors?: Partial<Record<"companyEmail" | "kraPin" | "businessType" | "mpesaTillOrPaybill" | "establishedDate" | "opensAt" | "closesAt", string>>;
+  errors?: Partial<Record<"companyEmail" | "kraPin" | "businessType" | "establishedDate" | "opensAt" | "closesAt", string>>;
 }) {
   const [directors, setDirectors] = useState<CompanyDirector[]>(
     kycType === "COMPANY" ? [{ name: "", idNumber: "", role: "Director" }] : [],
@@ -231,21 +231,6 @@ export function ProviderBusinessDetailsSection({
           ))}
         </select>
         <FieldHint error={errors?.businessType} />
-      </label>
-
-      <label className="block text-sm font-medium text-ink">
-        M-Pesa till or paybill *
-        <input
-          name="mpesaTillOrPaybill"
-          required
-          inputMode="numeric"
-          placeholder="e.g. 522522 or Till 123456"
-          className={errors?.mpesaTillOrPaybill ? fieldErrorClass : fieldClass}
-        />
-        <FieldHint
-          error={errors?.mpesaTillOrPaybill}
-          hint="Used for payouts and to confirm the business receives money"
-        />
       </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
