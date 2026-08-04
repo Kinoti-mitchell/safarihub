@@ -176,9 +176,6 @@ export function AddBusinessWizard({
       const establishedDate = String(
         new FormData(form).get("establishedDate") || "",
       ).trim();
-      const mpesa = String(
-        new FormData(form).get("mpesaTillOrPaybill") || "",
-      ).trim();
       if (!companyEmail.includes("@")) fields.companyEmail = "Enter company email";
       if (!/^[A-Z]\d{9}[A-Z]$/.test(kraPin)) {
         fields.kraPin = "Enter a valid KRA PIN (e.g. A123456789Z)";
@@ -187,10 +184,6 @@ export function AddBusinessWizard({
       if (!establishedDate) {
         fields.establishedDate =
           "Enter the date the business started operating";
-      }
-      if (mpesa.replace(/\D/g, "").length < 5) {
-        fields.mpesaTillOrPaybill =
-          "Enter M-Pesa till or paybill (at least 5 digits)";
       }
       const opensAt = String(new FormData(form).get("opensAt") || "").trim();
       const closesAt = String(new FormData(form).get("closesAt") || "").trim();
@@ -722,7 +715,6 @@ export function AddBusinessWizard({
             companyEmail: fieldErrors.companyEmail,
             kraPin: fieldErrors.kraPin,
             businessType: fieldErrors.businessType,
-            mpesaTillOrPaybill: fieldErrors.mpesaTillOrPaybill,
             establishedDate: fieldErrors.establishedDate,
             opensAt: fieldErrors.opensAt,
             closesAt: fieldErrors.closesAt,
