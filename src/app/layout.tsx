@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Metadata, Viewport } from "next";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Fraunces, Outfit } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { SiteHeader } from "@/components/site-header";
@@ -8,7 +8,9 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteChrome } from "@/components/site-chrome";
 import { MaintenanceGate } from "@/components/maintenance-gate";
 import { ReauthBanner } from "@/components/reauth-banner";
+import { LOCALE_COOKIE } from "@/components/locale-toggle";
 import { brandFromSettings } from "@/lib/branding";
+import { parseLocale } from "@/lib/i18n";
 import { getPlatformSettings } from "@/lib/settings";
 import "./globals.css";
 
@@ -65,10 +67,12 @@ export default async function RootLayout({
   const brand = await brandFromSettings();
   const h = await headers();
   const pathname = h.get("x-pathname") || "/";
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE)?.value);
 
   return (
     <html
-      lang="en"
+      lang={locale}
       data-scroll-behavior="smooth"
       className={`${display.variable} ${sans.variable} h-full`}
       style={

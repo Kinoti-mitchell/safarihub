@@ -76,6 +76,7 @@ export default function AccountTripsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [platformName, setPlatformName] = useState("Platform");
 
   async function load() {
     setLoading(true);
@@ -94,6 +95,24 @@ export default function AccountTripsPage() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/public/platform");
+        const data = await res.json();
+        if (!cancelled && data.platformName) {
+          setPlatformName(String(data.platformName));
+        }
+      } catch {
+        /* keep default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const trips: Trip[] = useMemo(() => {
@@ -188,8 +207,8 @@ export default function AccountTripsPage() {
     <div className="px-4 py-10 sm:px-8">
       <h1 className="font-display text-3xl font-semibold text-lake">My trips</h1>
       <p className="mt-1 text-sm text-ink-muted">
-        Your stays and packages across Safari Hub. Leave a review once a stay is
-        complete.
+        Your stays and packages across {platformName}. Leave a review once a stay
+        is complete.
       </p>
 
       {error && (

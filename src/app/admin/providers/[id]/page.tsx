@@ -191,6 +191,7 @@ export default function AdminProviderDetailPage() {
   const [busy, setBusy] = useState(false);
   const [rate, setRate] = useState(10);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [platformName, setPlatformName] = useState("Platform");
 
   const pushToast = useCallback((message: string, tone: Toast["tone"]) => {
     const tid = Date.now() + Math.random();
@@ -217,6 +218,15 @@ export default function AdminProviderDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void fetch("/api/public/platform")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.platformName) setPlatformName(String(d.platformName));
+      })
+      .catch(() => {});
+  }, []);
 
   async function patch(
     body: Record<string, unknown>,
@@ -557,7 +567,7 @@ export default function AdminProviderDetailPage() {
             <div className="mt-5 border-t border-line pt-4">
               <h3 className="text-sm font-semibold text-ink">Public storefront</h3>
               <p className="mt-1 text-xs text-ink-muted">
-                Their public business page on Safari Hub (
+                Their public business page on {platformName} (
                 <code className="text-[0.7rem]">/providers/…</code>
                 ), where travellers see the brand and published listings. It only
                 goes live after you approve them.

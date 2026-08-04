@@ -232,6 +232,7 @@ function filterItemsForRole(items: NavItem[], role: string): NavItem[] {
 export function ProviderSidebar({
   user,
   brand,
+  platformName,
   badges,
   membershipRole = "OWNER",
   businessType = null,
@@ -240,6 +241,8 @@ export function ProviderSidebar({
 }: {
   user: { name?: string | null; email?: string | null };
   brand?: { logoUrl?: string; logoText?: string; name?: string };
+  /** Marketplace product name (Admin → Settings), not the business name. */
+  platformName?: string;
   badges?: ProviderNavBadges;
   membershipRole?: string | StaffRole;
   businessType?: string | null;
@@ -259,7 +262,7 @@ export function ProviderSidebar({
       user={user}
       brand={brand}
       brandHref="/provider"
-      poweredBy="Powered by Safari Hub"
+      poweredBy={`Powered by ${platformName || "Platform"}`}
       topSlot={<BusinessSwitcher compact />}
     />
   );

@@ -64,7 +64,7 @@ export default async function PackageBookingPage({
     title?: string;
     days?: number;
   } | null;
-  const voucherData = `Safari Hub package · ${booking.reference} · ${pkg?.title || ""}`;
+  const voucherData = `${brand.name} package · ${booking.reference} · ${pkg?.title || ""}`;
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(voucherData)}`;
 
   return (

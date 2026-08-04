@@ -19,6 +19,7 @@ export default function BusinessesPage() {
   const { data: session } = useSession();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [platformName, setPlatformName] = useState("Platform");
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,6 +39,15 @@ export default function BusinessesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void fetch("/api/public/platform")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.platformName) setPlatformName(String(d.platformName));
+      })
+      .catch(() => {});
+  }, []);
 
   async function switchTo(providerId: string) {
     setBusy(true);
@@ -63,7 +73,7 @@ export default function BusinessesPage() {
         Your businesses
       </h1>
       <p className="mt-2 text-ink-muted">
-        One Safari Hub account can own and manage multiple hospitality
+        One {platformName} account can own and manage multiple hospitality
         businesses — hotels, restaurants, tours, transfers. Each new business
         uses the same stepped verification as signup before an admin can approve
         it.

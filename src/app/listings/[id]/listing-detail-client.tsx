@@ -66,6 +66,7 @@ export function ListingDetailClient({
 }: {
   params: Promise<{ id: string }>;
   trust?: {
+    platformName?: string;
     supportEmail?: string;
     supportPhone?: string;
     cancellationHours?: number;
@@ -533,8 +534,9 @@ export function ListingDetailClient({
     listing.media?.[0];
   const gallery = (listing.media || []).slice(0, 4);
   const placePhone = listing.phone || listing.provider?.phone || null;
+  const platformName = trust?.platformName || "this platform";
   const whatsapp = placePhone
-    ? `https://wa.me/${String(placePhone).replace(/\D/g, "")}?text=${encodeURIComponent(`Hi, I found ${listing.title} on Safari Hub`)}`
+    ? `https://wa.me/${String(placePhone).replace(/\D/g, "")}?text=${encodeURIComponent(`Hi, I found ${listing.title} on ${platformName}`)}`
     : null;
   const reviews = listing.reviews || [];
   const avgRating =

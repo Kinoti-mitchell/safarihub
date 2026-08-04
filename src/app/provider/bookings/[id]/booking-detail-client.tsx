@@ -156,9 +156,11 @@ function Field({
 export function ProviderBookingDetailClient({
   initialBooking,
   initialPriorBookings,
+  platformName = "Platform",
 }: {
   initialBooking: BookingDetail;
   initialPriorBookings: PriorBooking[];
+  platformName?: string;
 }) {
   const router = useRouter();
   const id = initialBooking.id;
@@ -355,7 +357,7 @@ export function ProviderBookingDetailClient({
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Name">{guest.name}</Field>
           <Field label="Account type">
-            {guest.isMember ? "Safari Hub member" : "Guest checkout (no account)"}
+            {guest.isMember ? `${platformName} member` : "Guest checkout (no account)"}
           </Field>
           <Field label="Email">
             {guest.email ? (

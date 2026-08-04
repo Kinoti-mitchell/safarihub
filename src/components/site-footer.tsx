@@ -1,11 +1,16 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { brandFromSettings } from "@/lib/branding";
+import { LOCALE_COOKIE } from "@/components/locale-toggle";
+import { parseLocale, t } from "@/lib/i18n";
 
 export async function SiteFooter() {
   const brand = await brandFromSettings();
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE)?.value);
   const about =
     brand.about ||
-    `${brand.name} is a digital hospitality ecosystem — connecting travellers with operators for stays, dining, transport, events and experiences.`;
+    t(locale, "defaultAbout", { name: brand.name });
 
   return (
     <footer className="mt-auto border-t border-line/40 bg-lake text-sand">
@@ -16,7 +21,7 @@ export async function SiteFooter() {
             {about}
           </p>
           <p className="mt-4 text-sm text-sand/80">
-            Support:{" "}
+            {t(locale, "support")}:{" "}
             <a
               href={`mailto:${brand.supportEmail}`}
               className="underline hover:text-sun-soft"
@@ -38,76 +43,74 @@ export async function SiteFooter() {
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sand/55">
-            Discover
+            {t(locale, "discover")}
           </p>
           <nav className="mt-3 flex flex-col gap-2 text-sm">
             <Link href="/browse" className="text-sand/85 hover:text-sun-soft">
-              Browse all
+              {t(locale, "browseAllShort")}
             </Link>
             <Link
               href="/destinations"
               className="text-sand/85 hover:text-sun-soft"
             >
-              Destinations
+              {t(locale, "destinations")}
             </Link>
             <Link
               href="/browse?category=stays"
               className="text-sand/85 hover:text-sun-soft"
             >
-              Stays
+              {t(locale, "catStays")}
             </Link>
             <Link
               href="/browse?category=explore"
               className="text-sand/85 hover:text-sun-soft"
             >
-              Tours &amp; experiences
+              {t(locale, "toursExperiences")}
             </Link>
             <Link href="/packages" className="text-sand/85 hover:text-sun-soft">
-              Packages
+              {t(locale, "packages")}
             </Link>
             <Link href="/events" className="text-sand/85 hover:text-sun-soft">
-              Events
+              {t(locale, "events")}
             </Link>
           </nav>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sand/55">
-            Travellers
+            {t(locale, "travellers")}
           </p>
           <nav className="mt-3 flex flex-col gap-2 text-sm">
             <Link
               href="/legal/cancellation"
               className="text-sand/85 hover:text-sun-soft"
             >
-              Cancellation
+              {t(locale, "cancellation")}
             </Link>
-            <p className="text-sand/70">
-              Emergency KE: 999 / 112
-            </p>
+            <p className="text-sand/70">{t(locale, "emergencyKe")}</p>
           </nav>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sand/55">
-            Company
+            {t(locale, "company")}
           </p>
           <nav className="mt-3 flex flex-col gap-2 text-sm">
             <Link href="/legal/about" className="text-sand/85 hover:text-sun-soft">
-              About
+              {t(locale, "about")}
             </Link>
             <Link href="/legal/terms" className="text-sand/85 hover:text-sun-soft">
-              Terms
+              {t(locale, "terms")}
             </Link>
             <Link
               href="/legal/privacy"
               className="text-sand/85 hover:text-sun-soft"
             >
-              Privacy
+              {t(locale, "privacy")}
             </Link>
             <Link
               href="/register?role=provider"
               className="text-sand/85 hover:text-sun-soft"
             >
-              For operators
+              {t(locale, "forOperators")}
             </Link>
           </nav>
         </div>
@@ -116,7 +119,7 @@ export async function SiteFooter() {
         <p className="mx-auto max-w-6xl px-4 py-4 text-xs text-sand/50 sm:px-6">
           © {new Date().getFullYear()} {brand.name}
           {brand.marketName
-            ? ` · Built for ${brand.marketName}'s hospitality economy`
+            ? ` · ${t(locale, "builtFor", { market: brand.marketName })}`
             : ""}
         </p>
       </div>

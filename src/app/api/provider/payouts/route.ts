@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { requireProviderAccess } from "@/lib/provider";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
+import { getPlatformName } from "@/lib/branding";
 import { getPlatformSettings, numberSetting } from "@/lib/settings";
 
 function addDaysISO(from: Date, days: number): string {
@@ -65,6 +66,7 @@ export async function GET() {
       }
     }
 
+    const platformName = await getPlatformName();
     return jsonOk({
       payouts,
       totalNet,
@@ -78,7 +80,7 @@ export async function GET() {
         pendingCount: pending.length,
         note:
           pendingNet > 0 || processingNet > 0
-            ? "Safari Hub settles pending balances on this cadence. Processing means an M-Pesa payout was started."
+            ? `${platformName} settles pending balances on this cadence. Processing means an M-Pesa payout was started.`
             : "No pending balance — new confirmed payments will appear here for the next settlement window.",
       },
     });

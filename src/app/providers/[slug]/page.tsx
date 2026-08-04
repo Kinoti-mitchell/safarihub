@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase";
 import { auth } from "@/lib/auth";
 import { expireDueBoosts } from "@/lib/boost";
+import { brandFromSettings } from "@/lib/branding";
 import { publicListingPath, publicProviderPath } from "@/lib/listing";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -40,11 +41,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq("slug", slug)
     .maybeSingle();
   if (!provider) return { title: "Provider" };
+  const brand = await brandFromSettings();
   return {
     title: provider.name,
     description:
       provider.description?.slice(0, 160) ||
-      `${provider.name} on Safari Hub — stays and experiences in Kenya`,
+      `${provider.name} on ${brand.name} — stays and experiences`,
     openGraph: {
       title: provider.name,
       description: provider.description || undefined,
@@ -97,6 +99,7 @@ export default async function ProviderStorefrontPage({ params }: Props) {
 
   // Public visitors only see approved businesses
   if (!approved && !isAdmin) {
+    const brand = await brandFromSettings();
     return (
       <div className="mx-auto max-w-lg px-4 py-16 sm:px-6">
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ink-muted">
@@ -106,7 +109,7 @@ export default async function ProviderStorefrontPage({ params }: Props) {
           {String(providerRow.name)}
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-ink-muted">
-          This business is not public on Safari Hub yet. It will appear here
+          This business is not public on {brand.name} yet. It will appear here
           after admin approval and when they publish listings.
         </p>
         <Link

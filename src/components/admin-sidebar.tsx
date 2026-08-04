@@ -236,7 +236,7 @@ export function AdminSidebar({
       user={user}
       brand={brand}
       brandHref="/admin"
-      poweredBy="Powered by Safari Hub"
+      poweredBy={`Powered by ${brand?.name || "Platform"}`}
     />
   );
 }

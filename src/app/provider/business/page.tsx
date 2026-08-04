@@ -152,6 +152,7 @@ export default function BusinessProfilePage() {
   const router = useRouter();
   const [business, setBusiness] = useState<Business | null>(null);
   const [owner, setOwner] = useState<Owner | null>(null);
+  const [platformName, setPlatformName] = useState("Platform");
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -185,6 +186,15 @@ export default function BusinessProfilePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void fetch("/api/public/platform")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.platformName) setPlatformName(String(d.platformName));
+      })
+      .catch(() => {});
+  }, []);
 
   async function onUploadLogo(file: File | null) {
     if (!file || !business?.isApproved) return;
@@ -392,7 +402,7 @@ export default function BusinessProfilePage() {
         <div className="rounded-xl border border-line bg-white/70 p-5">
           <h3 className="text-sm font-semibold text-ink">Owner details</h3>
           <p className="mt-1 text-xs text-ink-muted">
-            Account holder who registered this business on Safari Hub.
+            Account holder who registered this business on {platformName}.
           </p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
             <Field

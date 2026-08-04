@@ -133,9 +133,11 @@ const ITEMS: NavItem[] = [
 export function AccountSidebar({
   user,
   brand,
+  platformName,
 }: {
   user: { name?: string | null; email?: string | null };
   brand?: { logoUrl?: string; logoText?: string; name?: string };
+  platformName?: string;
 }) {
   return (
     <DashboardNav
@@ -144,7 +146,7 @@ export function AccountSidebar({
       user={user}
       brand={brand}
       brandHref="/account"
-      poweredBy="Powered by Safari Hub"
+      poweredBy={`Powered by ${platformName || "Platform"}`}
     />
   );
 }

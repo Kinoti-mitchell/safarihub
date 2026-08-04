@@ -2,8 +2,37 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
 type County = { slug: string; name: string };
 type CatOpt = { slug: string; label: string };
+
+export type HomeSearchLabels = {
+  where: string;
+  wherePlaceholder: string;
+  county: string;
+  anywhere: string;
+  anywhereIn: string;
+  type: string;
+  all: string;
+  checkIn: string;
+  checkOut: string;
+  guests: string;
+  search: string;
+};
+
+const DEFAULT_LABELS: HomeSearchLabels = {
+  where: "Where",
+  wherePlaceholder: "Lodge, town, vibe…",
+  county: "County",
+  anywhere: "Anywhere",
+  anywhereIn: "Anywhere",
+  type: "Type",
+  all: "All",
+  checkIn: "Check-in",
+  checkOut: "Check-out",
+  guests: "Guests",
+  search: "Search",
+};
 
 export function HomeSearch({
   marketName = "",
@@ -11,9 +40,11 @@ export function HomeSearch({
     { slug: "stays", label: "Stays" },
     { slug: "explore", label: "Explore" },
   ],
+  labels = DEFAULT_LABELS,
 }: {
   marketName?: string;
   categories?: CatOpt[];
+  labels?: HomeSearchLabels;
 }) {
   const router = useRouter();
   const [counties, setCounties] = useState<County[]>([]);
@@ -35,8 +66,8 @@ export function HomeSearch({
 
   const showGuests = !category || category === "stays" || category === "meet";
   const anywhereLabel = marketName.trim()
-    ? `Anywhere in ${marketName}`
-    : "Anywhere";
+    ? labels.anywhereIn
+    : labels.anywhere;
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -71,15 +102,15 @@ export function HomeSearch({
       className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
     >
       <label className="block min-w-0 flex-1 text-xs font-medium text-ink-muted sm:min-w-[10rem]">
-        Where
+        {labels.where}
         <input
           name="q"
-          placeholder="Lodge, town, vibe…"
+          placeholder={labels.wherePlaceholder}
           className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-muted focus:border-lake-bright"
         />
       </label>
       <label className="block text-xs font-medium text-ink-muted sm:w-40">
-        County
+        {labels.county}
         <select
           name="county"
           className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-lake-bright"
@@ -93,14 +124,14 @@ export function HomeSearch({
         </select>
       </label>
       <label className="block text-xs font-medium text-ink-muted sm:w-36">
-        Type
+        {labels.type}
         <select
           name="category"
           className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-lake-bright"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
         >
-          <option value="">All</option>
+          <option value="">{labels.all}</option>
           {categories.map((c) => (
             <option key={c.slug} value={c.slug}>
               {c.label}
@@ -111,7 +142,7 @@ export function HomeSearch({
       {showGuests && (
         <>
           <label className="block text-xs font-medium text-ink-muted sm:w-36">
-            Check-in
+            {labels.checkIn}
             <input
               name="checkIn"
               type="date"
@@ -120,7 +151,7 @@ export function HomeSearch({
             />
           </label>
           <label className="block text-xs font-medium text-ink-muted sm:w-36">
-            Check-out
+            {labels.checkOut}
             <input
               name="checkOut"
               type="date"
@@ -129,7 +160,7 @@ export function HomeSearch({
             />
           </label>
           <label className="block text-xs font-medium text-ink-muted sm:w-20">
-            Guests
+            {labels.guests}
             <input
               name="guests"
               type="number"
@@ -144,7 +175,7 @@ export function HomeSearch({
         type="submit"
         className="rounded-lg bg-lake px-5 py-2.5 text-sm font-semibold text-sand transition hover:bg-lake-bright sm:mb-0.5"
       >
-        Search
+        {labels.search}
       </button>
     </form>
   );

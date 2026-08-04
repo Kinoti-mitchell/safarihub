@@ -7,6 +7,7 @@ import { ProviderApprovalGate } from "@/components/provider-approval-gate";
 import { ProviderRoleGate } from "@/components/provider-role-gate";
 import { TabSessionGate } from "@/components/tab-session-gate";
 import { getProviderForUser } from "@/lib/provider";
+import { getPlatformName } from "@/lib/branding";
 import { boolSetting, getPlatformSettings } from "@/lib/settings";
 import { db } from "@/lib/supabase";
 
@@ -81,6 +82,7 @@ export default async function ProviderLayout({
     : undefined;
 
   const settings = await getPlatformSettings();
+  const platformName = await getPlatformName();
   const bindTab = boolSetting(settings, "security.bindSessionToTab");
   const suppliersEnabled = boolSetting(settings, "flags.suppliersEnabled");
   const staffingEnabled = boolSetting(settings, "flags.staffingEnabled");
@@ -98,6 +100,7 @@ export default async function ProviderLayout({
             logoUrl: businessLogo,
             logoText: brandInitials(businessName),
           }}
+          platformName={platformName}
           badges={badges}
           membershipRole={membershipRole}
           businessType={
@@ -116,11 +119,12 @@ export default async function ProviderLayout({
           <ProviderApprovalGate
             approved={approved}
             businessName={access?.provider.name as string | undefined}
+            platformName={platformName}
           >
             <ProviderRoleGate role={membershipRole}>{children}</ProviderRoleGate>
           </ProviderApprovalGate>
           <p className="px-4 py-3 text-center text-[0.7rem] text-ink-muted md:px-6">
-            Powered by Safari Hub
+            Powered by {platformName}
           </p>
         </div>
       </TabSessionGate>

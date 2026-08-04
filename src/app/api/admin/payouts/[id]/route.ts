@@ -4,6 +4,7 @@ import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import { requireAdminPermission } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { notifyAndEmail } from "@/lib/notify";
+import { getPlatformName } from "@/lib/branding";
 import { b2cPayment, isB2cConfigured } from "@/lib/mpesa";
 
 type Params = { params: Promise<{ id: string }> };
@@ -84,11 +85,12 @@ export async function PATCH(request: Request, { params }: Params) {
           400,
         );
       }
+      const platformName = await getPlatformName();
       const sent = await b2cPayment({
         phone,
         amount: existing.amount as number,
         reference: `PAYOUT-${id.slice(0, 8)}`,
-        remarks: `Safari Hub payout to ${provider?.name || "provider"}`,
+        remarks: `${platformName} payout to ${provider?.name || "provider"}`,
       });
       if (!sent.ok) return jsonError(sent.error, 502);
       nextStatus = "PROCESSING";

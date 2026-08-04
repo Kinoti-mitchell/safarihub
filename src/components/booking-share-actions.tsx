@@ -9,16 +9,18 @@ export function BookingShareActions({
   whenLabel,
   pageUrl,
   guestPhone,
+  platformName = "Platform",
 }: {
   reference: string;
   title: string;
   whenLabel: string;
   pageUrl: string;
   guestPhone?: string | null;
+  platformName?: string;
 }) {
   const [msg, setMsg] = useState<string | null>(null);
   const text = [
-    `Safari Hub booking ${reference}`,
+    `${platformName} booking ${reference}`,
     title,
     whenLabel,
     pageUrl,

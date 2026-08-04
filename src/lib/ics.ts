@@ -7,14 +7,17 @@ export function buildBookingIcs(opts: {
   startISO: string;
   endISO: string;
   url?: string;
+  /** Product name for PRODID (defaults to Platform). */
+  platformName?: string;
 }): string {
   const stamp = formatIcsDate(new Date());
   const dtStart = formatIcsDate(parseDay(opts.startISO));
   const dtEnd = formatIcsDate(parseDay(opts.endISO, true));
+  const prod = (opts.platformName || "Platform").replace(/[^\w\s.-]/g, "").trim() || "Platform";
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Safari Hub//EN",
+    `PRODID:-//${prod}//EN`,
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

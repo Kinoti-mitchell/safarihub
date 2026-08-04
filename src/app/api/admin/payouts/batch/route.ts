@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import { requireAdminPermission } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { getPlatformName } from "@/lib/branding";
 import { b2cPayment, isB2cConfigured } from "@/lib/mpesa";
 import { recordPaymentEvent } from "@/lib/payment-events";
 import { notifyAndEmail } from "@/lib/notify";
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
       error?: string;
       status?: string;
     }> = [];
+    const platformName = await getPlatformName();
 
     for (const row of rows ?? []) {
       const booking = row.booking as {
@@ -156,7 +158,7 @@ export async function POST(request: Request) {
           phone: phoneCheck.phone,
           amount: row.amount as number,
           reference: `PAYOUT-${String(row.id).slice(0, 8)}`,
-          remarks: `Safari Hub payout to ${provider?.name || "provider"}`,
+          remarks: `${platformName} payout to ${provider?.name || "provider"}`,
         });
         if (!sent.ok) {
           results.push({ id: row.id as string, ok: false, error: sent.error });

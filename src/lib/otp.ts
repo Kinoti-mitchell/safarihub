@@ -4,6 +4,7 @@ import { createId } from "@/lib/ids";
 import { sendSms, normalizePhone } from "@/lib/sms";
 import { sendEmail } from "@/lib/email";
 import { normalizeEmail, phoneVariants } from "@/lib/identity";
+import { getPlatformName } from "@/lib/branding";
 
 const isProd = process.env.NODE_ENV === "production";
 /** Production: 10 min. Local/dev: 24h so slow signup flows don't expire mid-test. */
@@ -112,19 +113,20 @@ export async function createAndSendOtp(opts: {
 
   const ttlLabel = isProd ? "10 minutes" : "24 hours (dev)";
   const testCode = getTestOtpCode();
+  const platformName = await getPlatformName();
   const message =
     opts.purpose === "login"
-      ? `Your Safari Hub login code is ${code}. It expires in ${ttlLabel}.`
-      : `Your Safari Hub verification code is ${code}. It expires in ${ttlLabel}.`;
+      ? `Your ${platformName} login code is ${code}. It expires in ${ttlLabel}.`
+      : `Your ${platformName} verification code is ${code}. It expires in ${ttlLabel}.`;
   let delivered = false;
   if (opts.channel === "phone") {
     delivered = await sendSms(destination, message);
   } else {
     delivered = await sendEmail({
       to: destination,
-      subject: "Safari Hub verification code",
+      subject: `${platformName} verification code`,
       text: message,
-      html: `<p>Your Safari Hub verification code is <strong>${code}</strong>.</p><p>It expires in ${ttlLabel}.</p>`,
+      html: `<p>Your ${platformName} verification code is <strong>${code}</strong>.</p><p>It expires in ${ttlLabel}.</p>`,
     });
   }
 

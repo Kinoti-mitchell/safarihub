@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { getPlatformName } from "@/lib/branding";
 import { getBookingForProviderReview } from "@/lib/provider-bookings";
 import {
   ProviderBookingDetailClient,
@@ -14,11 +15,14 @@ export default async function ProviderBookingDetailPage({ params }: Params) {
   if (!session?.user) redirect("/login?next=/provider/bookings");
 
   const { id } = await params;
-  const result = await getBookingForProviderReview({
-    bookingId: id,
-    userId: session.user.id,
-    role: session.user.role,
-  });
+  const [result, platformName] = await Promise.all([
+    getBookingForProviderReview({
+      bookingId: id,
+      userId: session.user.id,
+      role: session.user.role,
+    }),
+    getPlatformName(),
+  ]);
   if (!result) notFound();
 
   return (
@@ -27,6 +31,7 @@ export default async function ProviderBookingDetailPage({ params }: Params) {
       initialPriorBookings={
         result.priorBookings as unknown as PriorBooking[]
       }
+      platformName={platformName}
     />
   );
 }

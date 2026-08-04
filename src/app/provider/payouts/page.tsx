@@ -32,6 +32,7 @@ type PayoutData = {
 export default function ProviderPayoutsPage() {
   const [data, setData] = useState<PayoutData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [platformName, setPlatformName] = useState("Platform");
 
   useEffect(() => {
     void fetch("/api/provider/payouts")
@@ -40,6 +41,12 @@ export default function ProviderPayoutsPage() {
         if (d.error) setError(d.error);
         else setData(d);
       });
+    void fetch("/api/public/platform")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.platformName) setPlatformName(String(d.platformName));
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -48,7 +55,7 @@ export default function ProviderPayoutsPage() {
         Payouts
       </h1>
       <p className="mt-2 text-sm text-ink-muted">
-        Net amounts after Safari Hub commission. Settlements are processed by
+        Net amounts after {platformName} commission. Settlements are processed by
         the platform — you can track pending balance and the expected next pay
         window here.
       </p>

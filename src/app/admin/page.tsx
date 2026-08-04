@@ -58,6 +58,7 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [listingsExpanded, setListingsExpanded] = useState(false);
+  const [platformName, setPlatformName] = useState("Platform");
 
   const load = useCallback(async () => {
     try {
@@ -77,6 +78,24 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/public/platform");
+        const json = await res.json();
+        if (!cancelled && json.platformName) {
+          setPlatformName(String(json.platformName));
+        }
+      } catch {
+        /* keep default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (error) {
     return (
@@ -143,7 +162,7 @@ export default function AdminDashboardPage() {
             Dashboard
           </h1>
           <p className="mt-1 text-sm text-ink-muted">
-            A snapshot of everything happening across Safari Hub.
+            A snapshot of everything happening across {platformName}.
           </p>
         </div>
         {pendingTotal > 0 && (

@@ -37,7 +37,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     label: "General",
     description: "Basic platform identity and contact details.",
     fields: [
-      { key: "general.platformName", label: "Platform name", type: "text", default: "Safari Hub" },
+      {
+        key: "general.platformName",
+        label: "Platform name",
+        type: "text",
+        default: "Safari Hub",
+        help: "Public product name (header, emails, receipts, “Powered by…”). Change this to rebrand — e.g. Chrami Hub.",
+      },
       {
         key: "general.marketName",
         label: "Market / country",
@@ -98,7 +104,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         label: "Payment instructions",
         type: "textarea",
         default:
-          "Pay the listing publish fee via M-Pesa to the Safari Hub paybill/till, then paste your M-Pesa confirmation code. Your listing goes live after payment is verified.",
+          "Pay the listing publish fee via M-Pesa to the platform paybill/till, then paste your M-Pesa confirmation code. Your listing goes live after payment is verified.",
         help: "Shown to providers on the listing publish step.",
       },
     ],
@@ -121,7 +127,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         label: "Payment instructions",
         type: "textarea",
         default:
-          "Pay the boost fee via M-Pesa to the Safari Hub paybill/till, then paste your M-Pesa confirmation code when you request a boost. An admin will activate your boost after verifying payment.",
+          "Pay the boost fee via M-Pesa to the platform paybill/till, then paste your M-Pesa confirmation code when you request a boost. An admin will activate your boost after verifying payment.",
         help: "Shown to providers on the boost request form.",
       },
     ],
@@ -552,6 +558,28 @@ export async function savePlatformSettings(
 ): Promise<string[]> {
   const changed: string[] = [];
   const now = new Date().toISOString();
+
+  // When the public platform name changes, keep email "From" name in sync
+  // unless the admin already customized it to something else.
+  const nextName = coerceSetting("general.platformName", patch["general.platformName"]);
+  if (typeof nextName === "string" && nextName.trim()) {
+    const current = await getPlatformSettings();
+    const prevName = String(current["general.platformName"] || "").trim();
+    const fromName = String(current["email.fromName"] || "").trim();
+    const fromUntouched =
+      !fromName ||
+      fromName === prevName ||
+      fromName === "Safari Hub" ||
+      fromName === String(DEFAULT_SETTINGS["email.fromName"] || "");
+    if (
+      fromUntouched &&
+      patch["email.fromName"] == null &&
+      nextName.trim() !== fromName
+    ) {
+      patch = { ...patch, "email.fromName": nextName.trim() };
+    }
+  }
+
   const rows = Object.entries(patch)
     .map(([key, raw]) => {
       const value = coerceSetting(key, raw);

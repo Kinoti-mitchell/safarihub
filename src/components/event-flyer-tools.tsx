@@ -18,6 +18,7 @@ type Props = {
   event: EventDetails;
   media: MediaItem[];
   disabled?: boolean;
+  platformName?: string;
   onChanged: () => Promise<void> | void;
   onError: (msg: string) => void;
   onMsg: (msg: string) => void;
@@ -140,19 +141,19 @@ export function EventFlyerTools({
   event,
   media,
   disabled,
+  platformName = "Platform",
   onChanged,
   onError,
   onMsg,
 }: Props) {
+  const defaultTagline = `Tickets on ${platformName}`;
   const [busy, setBusy] = useState(false);
   const [editText, setEditText] = useState(false);
   const [title, setTitle] = useState(event.title);
   const [when, setWhen] = useState(event.when || "");
   const [where, setWhere] = useState(event.where || "");
   const [price, setPrice] = useState(event.price || "");
-  const [tagline, setTagline] = useState(
-    event.tagline || "Tickets on Safari Hub",
-  );
+  const [tagline, setTagline] = useState(event.tagline || defaultTagline);
   const [sceneId, setSceneId] = useState<(typeof SCENES)[number]["id"]>("concert");
   const [layoutId, setLayoutId] = useState<(typeof LAYOUTS)[number]["id"]>("hero");
   const [bgSource, setBgSource] = useState<"scene" | "listing" | "upload">("scene");
@@ -172,8 +173,9 @@ export function EventFlyerTools({
     setWhen(event.when || "");
     setWhere(event.where || "");
     setPrice(event.price || "");
-    setTagline(event.tagline || "Tickets on Safari Hub");
+    setTagline(event.tagline || defaultTagline);
   }, [
+    defaultTagline,
     event.title,
     event.when,
     event.where,
@@ -341,7 +343,7 @@ export function EventFlyerTools({
 
     ctx.fillStyle = "rgba(255,250,240,0.85)";
     ctx.font = "400 28px system-ui, sans-serif";
-    wrapText(ctx, tagline.trim() || "Tickets on Safari Hub", 64, h - 90, w - 160, 34);
+    wrapText(ctx, tagline.trim() || defaultTagline, 64, h - 90, w - 160, 34);
   }
 
   async function drawSplit(

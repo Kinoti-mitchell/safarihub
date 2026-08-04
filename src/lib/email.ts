@@ -162,7 +162,10 @@ export async function sendEmail(msg: EmailMessage): Promise<boolean> {
       str(settings, "notifications.fromEmail") ||
       process.env.GMAIL_USER?.trim() ||
       "no-reply@safarihub.co.ke";
-    const fromName = str(settings, "email.fromName") || "Safari Hub";
+    const fromName =
+      str(settings, "email.fromName") ||
+      str(settings, "general.platformName") ||
+      "Platform";
     const to = Array.isArray(msg.to) ? msg.to : [msg.to];
     const recipients = to.map((t) => t.trim()).filter(Boolean);
     if (recipients.length === 0) return false;

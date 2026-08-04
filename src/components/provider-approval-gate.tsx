@@ -21,10 +21,12 @@ function isAllowedWhilePending(pathname: string): boolean {
 export function ProviderApprovalGate({
   approved,
   businessName,
+  platformName = "Platform",
   children,
 }: {
   approved: boolean;
   businessName?: string | null;
+  platformName?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname() || "/provider";
@@ -45,11 +47,11 @@ export function ProviderApprovalGate({
         <p className="mt-3 text-sm leading-relaxed text-ink">
           {businessName ? (
             <>
-              <span className="font-semibold">{businessName}</span> is waiting for
-              Safari Hub admin approval.
+              <span className="font-semibold">{businessName}</span> is waiting for{" "}
+              {platformName} admin approval.
             </>
           ) : (
-            <>Your business is waiting for Safari Hub admin approval.</>
+            <>Your business is waiting for {platformName} admin approval.</>
           )}{" "}
           You can update your profile, business details, and KYC while you wait.
           Listing properties, inviting staff, taking bookings, and suppliers

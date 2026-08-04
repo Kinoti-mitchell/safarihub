@@ -171,6 +171,7 @@ function RegisterForm() {
 
   const [allowSelfSignup, setAllowSelfSignup] = useState(true);
   const [minPasswordLength, setMinPasswordLength] = useState(6);
+  const [platformName, setPlatformName] = useState("Platform");
   const [platformReady, setPlatformReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -228,6 +229,7 @@ function RegisterForm() {
         const data = await res.json();
         if (cancelled) return;
         setAllowSelfSignup(data.allowSelfSignup !== false);
+        if (data.platformName) setPlatformName(String(data.platformName));
         setMinPasswordLength(
           Number(data.minPasswordLength) > 0
             ? Number(data.minPasswordLength)
@@ -997,7 +999,7 @@ function RegisterForm() {
       />
       <div className="card relative animate-fade-up p-8 shadow-md">
         <h1 className="font-display text-3xl font-semibold text-lake">
-          Join Safari Hub
+          Join {platformName}
         </h1>
         <p className="mt-2 text-sm text-ink-muted">
           {asProvider

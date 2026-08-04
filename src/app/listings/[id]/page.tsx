@@ -12,6 +12,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const listing = await findListingByIdOrSlug(id);
   if (!listing) return { title: "Listing" };
 
+  const brand = await brandFromSettings();
   const cover =
     listing.media.find((m) => m.isCover) || listing.media[0];
   const place = [listing.town?.name, listing.county.name]
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .join(", ");
   const description =
     listing.description?.slice(0, 160) ||
-    `${listing.title} in ${place} — book on Safari Hub`;
+    `${listing.title} in ${place} — book on ${brand.name}`;
 
   return {
     title: listing.title,
@@ -56,6 +57,7 @@ export default async function ListingDetailPage({ params }: Props) {
       <ListingDetailClient
         params={params}
         trust={{
+          platformName: brand.name,
           supportEmail: brand.supportEmail,
           supportPhone: brand.supportPhone || undefined,
           cancellationHours: numberSetting(

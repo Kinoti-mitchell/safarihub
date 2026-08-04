@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "crypto";
 import { db } from "@/lib/supabase";
 import { createId } from "@/lib/ids";
 import { sendEmail, appUrl } from "@/lib/email";
+import { getPlatformName } from "@/lib/branding";
 import { handleRouteError, jsonOk } from "@/lib/http";
 
 const schema = z.object({
@@ -48,9 +49,10 @@ export async function POST(request: Request) {
       });
 
       const link = appUrl(`/reset?token=${token}`);
+      const platformName = await getPlatformName();
       await sendEmail({
         to: email,
-        subject: "Reset your Safari Hub password",
+        subject: `Reset your ${platformName} password`,
         text: `Hi ${user.name || "there"},\n\nReset your password using this link (valid for 1 hour):\n\n${link}\n\nIf you didn't ask for this, you can ignore this email.`,
         html: `<p>Hi ${user.name || "there"},</p><p>Reset your password using this link (valid for 1 hour):</p><p><a href="${link}">${link}</a></p><p>If you didn't ask for this, you can ignore this email.</p>`,
       });

@@ -12,7 +12,8 @@ export async function GET() {
   try {
     const settings = await getPlatformSettings();
     return jsonOk({
-      platformName: String(settings["general.platformName"] || "Safari Hub"),
+      platformName:
+        String(settings["general.platformName"] || "").trim() || "Platform",
       currency: String(settings["general.currency"] || "KES"),
       timezone: String(settings["general.timezone"] || "Africa/Nairobi"),
       maintenanceMode: boolSetting(settings, "general.maintenanceMode"),

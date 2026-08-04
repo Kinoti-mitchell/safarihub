@@ -10,7 +10,9 @@ export function LocaleToggle({ initial }: { initial?: string }) {
   const locale = parseLocale(initial);
 
   function setLocale(next: Locale) {
+    if (next === locale) return;
     document.cookie = `${COOKIE}=${next};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+    // Soft refresh re-reads the cookie on server components (header, home, footer).
     router.refresh();
   }
 

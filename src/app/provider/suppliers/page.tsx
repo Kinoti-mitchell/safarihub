@@ -41,6 +41,7 @@ export default function SuppliersPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [setupRequired, setSetupRequired] = useState(false);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
+  const [platformName, setPlatformName] = useState("Platform");
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -64,6 +65,15 @@ export default function SuppliersPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void fetch("/api/public/platform")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.platformName) setPlatformName(String(d.platformName));
+      })
+      .catch(() => {});
+  }, []);
 
   async function placeOrder(e: FormEvent<HTMLFormElement>, offerId: string) {
     e.preventDefault();
@@ -299,7 +309,7 @@ export default function SuppliersPage() {
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       <h1 className="font-display text-3xl font-semibold text-lake">Suppliers</h1>
       <p className="mt-2 max-w-2xl text-ink-muted">
-        Register your own vendors, or order from the Safari Hub marketplace.
+        Register your own vendors, or order from the {platformName} marketplace.
         Stock received can be logged under Inventory.
       </p>
 

@@ -189,7 +189,7 @@ export default async function ReceiptPage({ params, searchParams }: Params) {
           </Link>
         ) : (
           <Link href="/" className="text-sm text-lake-bright underline">
-            ← Safari Hub
+            ← {brand.name}
           </Link>
         )}
         <ReceiptPrintButton />

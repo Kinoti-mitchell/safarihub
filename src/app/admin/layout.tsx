@@ -35,7 +35,7 @@ export default async function AdminLayout({
           />
           {children}
           <p className="px-4 py-3 text-center text-[0.7rem] text-ink-muted md:px-6">
-            Powered by Safari Hub
+            Powered by {brand.name}
           </p>
         </div>
       </TabSessionGate>

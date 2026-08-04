@@ -112,6 +112,7 @@ export default function ProviderListingDetailPage({
   const { id } = use(params);
   const [listing, setListing] = useState<any>(null);
   const [completeness, setCompleteness] = useState<any>(null);
+  const [platformName, setPlatformName] = useState("Platform");
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [step, setStep] = useState(0);
@@ -253,6 +254,15 @@ export default function ProviderListingDetailPage({
     void load({ initStep: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    void fetch("/api/public/platform")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.platformName) setPlatformName(String(d.platformName));
+      })
+      .catch(() => {});
+  }, []);
 
   function registrationDate(): string {
     const raw = listing?.provider?.createdAt;
@@ -2105,6 +2115,7 @@ export default function ProviderListingDetailPage({
           return (
             <EventFlyerTools
               listingId={id}
+              platformName={platformName}
               event={{
                 title:
                   (ticket?.name && String(ticket.name).trim()) ||
@@ -2119,7 +2130,7 @@ export default function ProviderListingDetailPage({
                 tagline:
                   (listing.description &&
                     String(listing.description).trim().slice(0, 80)) ||
-                  "Tickets on Safari Hub",
+                  `Tickets on ${platformName}`,
               }}
               media={listing.media || []}
               disabled={disabled}

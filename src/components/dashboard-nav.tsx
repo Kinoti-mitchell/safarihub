@@ -122,7 +122,7 @@ export function DashboardNav({
   const initial = (user.name || user.email || "?").charAt(0).toUpperCase();
   const logoUrl = brand?.logoUrl || "";
   const logoText = (brand?.logoText || "SH").slice(0, 2);
-  const brandName = brand?.name || "Safari Hub";
+  const brandName = brand?.name || "Platform";
 
   return (
     <aside

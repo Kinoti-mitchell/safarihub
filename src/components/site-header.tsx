@@ -83,9 +83,7 @@ export async function SiteHeader() {
           <NavLink href="/trip" className="hidden sm:inline-block">
             {t(locale, "tripBuilder")}
           </NavLink>
-          <span className="hidden sm:inline-flex">
-            <LocaleToggle initial={locale} />
-          </span>
+          <LocaleToggle initial={locale} />
           <HeaderAuth
             dash={dash}
             loginLabel={t(locale, "login")}

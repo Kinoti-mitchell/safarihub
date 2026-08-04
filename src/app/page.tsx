@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { HomeHero, type HeroSlide } from "@/components/hero-carousel";
 import { HomeSearch } from "@/components/home-search";
 import { publicCategories } from "@/lib/categories";
@@ -11,6 +12,13 @@ import { publicListingPath } from "@/lib/listing-paths";
 import { amenityLabel } from "@/lib/amenities";
 import { boolSetting, getPlatformSettings } from "@/lib/settings";
 import { db } from "@/lib/supabase";
+import {
+  categoryBlurbI18n,
+  categoryLabelI18n,
+  parseLocale,
+  t,
+} from "@/lib/i18n";
+import { LOCALE_COOKIE } from "@/components/locale-toggle";
 import Link from "next/link";
 
 function toHeroSlide(
@@ -47,6 +55,9 @@ function toHeroSlide(
 }
 
 export default async function HomePage() {
+  const cookieStore = await cookies();
+  const locale = parseLocale(cookieStore.get(LOCALE_COOKIE)?.value);
+
   const [featured, brand, settings, countiesRes] = await Promise.all([
     getFeaturedListings(6),
     brandFromSettings(),
@@ -69,8 +80,8 @@ export default async function HomePage() {
   const acceptCash = boolSetting(settings, "payments.cashEnabled");
   const paymentBits = [
     acceptMpesa ? "M-Pesa" : null,
-    acceptCard ? "Card" : null,
-    acceptCash ? "Cash on arrival" : null,
+    acceptCard ? t(locale, "card") : null,
+    acceptCash ? t(locale, "cashOnArrival") : null,
   ].filter(Boolean) as string[];
 
   let heroSlides = featured
@@ -90,12 +101,19 @@ export default async function HomePage() {
     ];
   }
 
-  const marketLine = brand.marketName
-    ? `across ${brand.marketName}`
-    : "in one marketplace";
+  const marketPhrase = brand.marketName
+    ? t(locale, "acrossMarket", { market: brand.marketName })
+    : t(locale, "inOneMarketplace");
   const defaultSub =
     brand.heroSubheadline ||
-    `Stay, eat, move, explore and meet — hospitality ${marketLine}.`;
+    t(locale, "defaultHeroSub", { market: marketPhrase });
+
+  const categories = publicCategories(settings).map((c) => ({
+    slug: c.slug,
+    label: categoryLabelI18n(locale, c.slug),
+    blurb: categoryBlurbI18n(locale, c.slug),
+    image: c.image,
+  }));
 
   return (
     <div>
@@ -112,15 +130,30 @@ export default async function HomePage() {
       <section className="border-b border-line/60 bg-white/70">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-            Find a place
+            {t(locale, "findAPlace")}
           </p>
           <div className="mt-3">
             <HomeSearch
               marketName={brand.marketName}
-              categories={publicCategories(settings).map((c) => ({
+              categories={categories.map((c) => ({
                 slug: c.slug,
                 label: c.label,
               }))}
+              labels={{
+                where: t(locale, "where"),
+                wherePlaceholder: t(locale, "wherePlaceholder"),
+                county: t(locale, "county"),
+                anywhere: t(locale, "anywhere"),
+                anywhereIn: brand.marketName
+                  ? t(locale, "anywhereIn", { market: brand.marketName })
+                  : t(locale, "anywhere"),
+                type: t(locale, "type"),
+                all: t(locale, "all"),
+                checkIn: t(locale, "checkIn"),
+                checkOut: t(locale, "checkOut"),
+                guests: t(locale, "guests"),
+                search: t(locale, "search"),
+              }}
             />
           </div>
         </div>
@@ -129,15 +162,14 @@ export default async function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
         <div className="max-w-2xl">
           <h2 className="font-display text-3xl font-semibold text-lake sm:text-4xl">
-            One trip. Every piece.
+            {t(locale, "oneTripEveryPiece")}
           </h2>
           <p className="mt-2 text-ink-muted">
-            Stays and tours first — the same marketplace operators use to run
-            hospitality {marketLine}.
+            {t(locale, "oneTripBlurb", { market: marketPhrase })}
           </p>
         </div>
         <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/70 sm:grid-cols-2 lg:grid-cols-5">
-          {publicCategories(settings).map((c) => (
+          {categories.map((c) => (
             <Link
               key={c.slug}
               href={`/browse?category=${c.slug}`}
@@ -165,17 +197,17 @@ export default async function HomePage() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
-                  Plan your trip
+                  {t(locale, "planYourTrip")}
                 </p>
                 <h2 className="mt-1 font-display text-2xl font-semibold text-lake sm:text-3xl">
-                  Destinations
+                  {t(locale, "destinations")}
                 </h2>
               </div>
               <Link
                 href="/destinations"
                 className="text-sm font-semibold text-lake-bright hover:text-lake"
               >
-                All destinations →
+                {t(locale, "allDestinations")}
               </Link>
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -198,23 +230,20 @@ export default async function HomePage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="max-w-2xl">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-muted">
-                Curated
+                {t(locale, "curated")}
               </p>
               <h2 className="mt-1 font-display text-3xl font-semibold text-lake sm:text-4xl">
                 {brand.marketName
-                  ? `Featured across ${brand.marketName}`
-                  : `Featured on ${brand.name}`}
+                  ? t(locale, "featuredAcross", { market: brand.marketName })
+                  : t(locale, "featuredOn", { name: brand.name })}
               </h2>
-              <p className="mt-2 text-ink-muted">
-                Hand-picked stays, dining, transport and experiences — not
-                limited to one category.
-              </p>
+              <p className="mt-2 text-ink-muted">{t(locale, "featuredBlurb")}</p>
             </div>
             <Link
               href="/browse"
               className="text-sm font-semibold text-lake-bright hover:text-lake"
             >
-              Browse all →
+              {t(locale, "browseAll")}
             </Link>
           </div>
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -229,20 +258,24 @@ export default async function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-6 text-sm text-ink-muted sm:px-6">
           {paymentBits.length > 0 && (
             <p>
-              <span className="font-semibold text-ink">Pay your way</span>
+              <span className="font-semibold text-ink">
+                {t(locale, "payYourWay")}
+              </span>
               <span className="mx-2 text-line">·</span>
               {paymentBits.join(", ")}
             </p>
           )}
           <p>
-            <span className="font-semibold text-ink">Verified operators</span>
+            <span className="font-semibold text-ink">
+              {t(locale, "verifiedOperators")}
+            </span>
             <span className="mx-2 text-line">·</span>
-            Reviewed before going live
+            {t(locale, "reviewedBeforeLive")}
           </p>
           <p>
-            <span className="font-semibold text-ink">PWA</span>
+            <span className="font-semibold text-ink">{t(locale, "pwaLabel")}</span>
             <span className="mx-2 text-line">·</span>
-            Works without an app store
+            {t(locale, "worksWithoutAppStore")}
           </p>
         </div>
       </section>
@@ -251,7 +284,7 @@ export default async function HomePage() {
         <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <div>
             <h2 className="font-display text-3xl font-semibold text-lake sm:text-4xl">
-              How it works
+              {t(locale, "howItWorks")}
             </h2>
             <ol className="mt-8 space-y-6">
               <li className="flex gap-4">
@@ -260,10 +293,10 @@ export default async function HomePage() {
                 </span>
                 <div>
                   <p className="font-display text-lg font-semibold text-ink">
-                    Discover
+                    {t(locale, "stepDiscover")}
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">
-                    Browse verified stays and experiences by destination.
+                    {t(locale, "stepDiscoverBody")}
                   </p>
                 </div>
               </li>
@@ -273,12 +306,14 @@ export default async function HomePage() {
                 </span>
                 <div>
                   <p className="font-display text-lg font-semibold text-ink">
-                    Book &amp; pay
+                    {t(locale, "stepBookPay")}
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">
-                    Reserve instantly or on request
+                    {t(locale, "stepBookPayBody")}
                     {paymentBits.length
-                      ? `. Pay with ${paymentBits.join(", ").toLowerCase()}.`
+                      ? t(locale, "stepBookPayPayWith", {
+                          methods: paymentBits.join(", ").toLowerCase(),
+                        })
                       : "."}
                   </p>
                 </div>
@@ -290,11 +325,11 @@ export default async function HomePage() {
                 <div>
                   <p className="font-display text-lg font-semibold text-ink">
                     {brand.marketName
-                      ? `Enjoy ${brand.marketName}`
-                      : `Enjoy your trip`}
+                      ? t(locale, "stepEnjoy", { market: brand.marketName })
+                      : t(locale, "stepEnjoyTrip")}
                   </p>
                   <p className="mt-1 text-sm text-ink-muted">
-                    Turn up and enjoy — loyalty points on every trip.
+                    {t(locale, "stepEnjoyBody")}
                   </p>
                 </div>
               </li>
@@ -314,20 +349,19 @@ export default async function HomePage() {
               />
             ) : null}
             <p className="relative text-xs font-semibold uppercase tracking-[0.18em] text-sand/60">
-              For operators
+              {t(locale, "forOperators")}
             </p>
             <h3 className="relative font-display mt-3 text-2xl font-semibold text-sand sm:text-3xl">
-              Run your hospitality business on {brand.name}
+              {t(locale, "runBusinessOn", { name: brand.name })}
             </h3>
             <p className="relative mt-3 text-sm leading-relaxed text-sand/80">
-              Listings, bookings, inbox and payouts — tools for hotels, venues,
-              tours and transfers, not just a storefront.
+              {t(locale, "operatorsBlurb")}
             </p>
             <Link
               href="/register?role=provider"
               className="relative mt-6 inline-flex rounded-lg bg-sun px-5 py-2.5 text-sm font-semibold text-ink transition hover:brightness-110"
             >
-              Become a provider
+              {t(locale, "becomeProvider")}
             </Link>
           </div>
         </div>

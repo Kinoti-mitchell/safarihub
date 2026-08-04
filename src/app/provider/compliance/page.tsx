@@ -39,6 +39,7 @@ export default function CompliancePage() {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [platformName, setPlatformName] = useState("Platform");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/provider/compliance");
@@ -54,6 +55,15 @@ export default function CompliancePage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void fetch("/api/public/platform")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.platformName) setPlatformName(String(d.platformName));
+      })
+      .catch(() => {});
+  }, []);
 
   async function savePin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -220,7 +230,7 @@ export default function CompliancePage() {
             )}
             {data.kyc.status !== "REJECTED" && (
               <p className="mt-1 text-sm text-ink-muted">
-                Verified by Safari Hub admin.
+                Verified by {platformName} admin.
               </p>
             )}
           </section>

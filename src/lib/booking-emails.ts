@@ -1,5 +1,6 @@
 import { sendEmail, appUrl } from "@/lib/email";
 import { notify } from "@/lib/notify";
+import { getPlatformName } from "@/lib/branding";
 import { boolSetting, getPlatformSettings } from "@/lib/settings";
 import { getPlatformTimezone } from "@/lib/datetime";
 
@@ -131,6 +132,7 @@ export async function emailTouristBookingConfirmed(
   const href = manageHref(booking);
   const link = appUrl(href);
 
+  const platformName = await getPlatformName();
   const subject = `Booking confirmed · ${listing}`;
   const text = [
     `Hi ${guest.name},`,
@@ -149,7 +151,7 @@ export async function emailTouristBookingConfirmed(
     `View or manage your booking:`,
     link,
     ``,
-    `— Safari Hub`,
+    `— ${platformName}`,
   ]
     .filter((line) => line != null)
     .join("\n");
@@ -177,7 +179,7 @@ export async function emailTouristBookingConfirmed(
           View confirmation
         </a>
       </p>
-      <p style="font-size:12px;color:#6b635b">Powered by Safari Hub</p>
+      <p style="font-size:12px;color:#6b635b">Powered by ${escapeHtml(platformName)}</p>
     </div>
   `;
 

@@ -144,7 +144,7 @@ export default async function ManageBookingPage({
   const cancelHours = numberSetting(settings, "booking.cancellationWindowHours");
 
   const voucherData = [
-    `Safari Hub`,
+    brand.name,
     `Ref ${booking.reference}`,
     listing?.title || "",
     `${formatStayDay(checkIn)} → ${formatStayDay(booking.checkOut as string)}`,
@@ -304,10 +304,11 @@ export default async function ManageBookingPage({
       </div>
       <BookingShareActions
         reference={booking.reference as string}
-        title={listing?.title || "Safari Hub booking"}
+        title={listing?.title || `${brand.name} booking`}
         whenLabel={`${formatStayDay(checkIn)} → ${formatStayDay(booking.checkOut as string)}`}
         pageUrl={`${process.env.NEXT_PUBLIC_APP_URL || "https://safarihub.ke"}/bookings/${id}${token ? `?t=${token}` : booking.accessToken ? `?t=${booking.accessToken}` : ""}`}
         guestPhone={guestPhone}
+        platformName={brand.name}
       />
 
       <section className="mt-10 print:hidden">

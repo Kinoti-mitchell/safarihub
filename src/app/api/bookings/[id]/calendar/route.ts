@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { getProviderForUser } from "@/lib/provider";
+import { getPlatformName } from "@/lib/branding";
 import { buildBookingIcs } from "@/lib/ics";
 import { handleRouteError, jsonError } from "@/lib/http";
 
@@ -53,23 +54,30 @@ export async function GET(request: Request, { params }: Params) {
       ? `${url.origin}/bookings/${id}?t=${token}`
       : `${url.origin}/bookings/${id}`;
 
+    const platformName = await getPlatformName();
     const ics = buildBookingIcs({
-      uid: `${booking.reference}@safarihub`,
+      uid: `${booking.reference}@platform`,
       title: listing?.title
         ? `${listing.title} · ${booking.reference}`
         : `Booking ${booking.reference}`,
-      description: `Safari Hub booking ${booking.reference}. Manage: ${manageUrl}`,
+      description: `${platformName} booking ${booking.reference}. Manage: ${manageUrl}`,
       location: listing?.address || listing?.title || undefined,
       startISO: booking.checkIn as string,
       endISO: booking.checkOut as string,
       url: manageUrl,
+      platformName,
     });
+
+    const slug = platformName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "booking";
 
     return new NextResponse(ics, {
       status: 200,
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
-        "Content-Disposition": `attachment; filename="safari-hub-${booking.reference}.ics"`,
+        "Content-Disposition": `attachment; filename="${slug}-${booking.reference}.ics"`,
         "Cache-Control": "no-store",
       },
     });

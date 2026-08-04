@@ -18,6 +18,12 @@ export type Brand = {
   googleMapsApiKey: string;
 };
 
+/** Public marketplace name from Admin → Settings → General. */
+export async function getPlatformName(): Promise<string> {
+  const s = await getPlatformSettings();
+  return String(s["general.platformName"] || "").trim() || "Platform";
+}
+
 /** Resolve the current brand (logo + name) from platform settings. */
 export async function brandFromSettings(): Promise<Brand> {
   const s = await getPlatformSettings();

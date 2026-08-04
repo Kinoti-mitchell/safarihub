@@ -6,6 +6,7 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { notifyAndEmail } from "@/lib/notify";
 import { resolveHardGateAutoApproval } from "@/lib/provider-auto-approval";
+import { getPlatformName } from "@/lib/branding";
 import { getPlatformSettings } from "@/lib/settings";
 
 type Params = { params: Promise<{ id: string }> };
@@ -327,6 +328,8 @@ export async function PATCH(request: Request, { params }: Params) {
       metadata: body,
     });
 
+    const platformName = await getPlatformName();
+
     // Confirmation to every team member when business is approved
     if (body.isApproved === true) {
       const { data: members } = await db
@@ -341,7 +344,7 @@ export async function PATCH(request: Request, { params }: Params) {
           email: (user.email as string) || null,
           type: "provider.approved",
           title: `${provider.name} is approved`,
-          body: `Good news — your business "${provider.name}" has been approved on Safari Hub. You can now create listings and run your hospitality OS.`,
+          body: `Good news — your business "${provider.name}" has been approved on ${platformName}. You can now create listings and run your hospitality OS.`,
           href: "/provider",
         });
       }
@@ -367,7 +370,7 @@ export async function PATCH(request: Request, { params }: Params) {
                     ? ` Reason: ${provider.rejectionReason}`
                     : ""
                 } Update your documents at Compliance and resubmit for review.`
-              : `"${provider.name}" is not approved to operate on Safari Hub yet.`,
+              : `"${provider.name}" is not approved to operate on ${platformName} yet.`,
           href: "/provider/compliance",
         });
       }

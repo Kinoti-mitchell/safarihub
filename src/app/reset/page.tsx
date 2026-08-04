@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 
 function ResetForm() {
   const params = useSearchParams();
@@ -89,6 +89,25 @@ function ResetForm() {
 }
 
 export default function ResetPasswordPage() {
+  const [platformName, setPlatformName] = useState("Platform");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/public/platform");
+        const data = await res.json();
+        if (!cancelled && data.platformName) {
+          setPlatformName(String(data.platformName));
+        }
+      } catch {
+        /* keep default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md flex-col justify-center px-4 py-12">
       <div className="card p-8 shadow-md">
@@ -96,7 +115,7 @@ export default function ResetPasswordPage() {
           Set a new password
         </h1>
         <p className="mt-2 text-sm text-ink-muted">
-          Choose a new password for your Safari Hub account.
+          Choose a new password for your {platformName} account.
         </p>
         <Suspense fallback={<p className="mt-6 text-sm text-ink-muted">Loading…</p>}>
           <ResetForm />

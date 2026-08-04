@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { AccountSidebar } from "@/components/account-sidebar";
 import { AnnouncementBanner } from "@/components/announcement-banner";
 import { TabSessionGate } from "@/components/tab-session-gate";
+import { getPlatformName } from "@/lib/branding";
 import { boolSetting, getPlatformSettings } from "@/lib/settings";
 
 function brandInitials(name: string): string {
@@ -26,6 +27,7 @@ export default async function AccountLayout({
     "My account";
 
   const settings = await getPlatformSettings();
+  const platformName = await getPlatformName();
   const bindTab = boolSetting(settings, "security.bindSessionToTab");
 
   return (
@@ -41,6 +43,7 @@ export default async function AccountLayout({
             logoUrl: session.user.image || "",
             logoText: brandInitials(displayName),
           }}
+          platformName={platformName}
         />
         <div className="dash-shell min-w-0 flex-1 md:overflow-y-auto">
           <div
@@ -50,7 +53,7 @@ export default async function AccountLayout({
           <AnnouncementBanner />
           {children}
           <p className="px-4 py-3 text-center text-[0.7rem] text-ink-muted md:px-6">
-            Powered by Safari Hub
+            Powered by {platformName}
           </p>
         </div>
       </TabSessionGate>
