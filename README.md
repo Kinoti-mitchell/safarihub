@@ -111,5 +111,5 @@ Configured in `vercel.json` (requires `CRON_SECRET` in production):
 
 | Path | Schedule | Purpose |
 |------|----------|---------|
-| `/api/cron/complete-bookings` | Hourly | Past stays → `COMPLETED` + review token |
-| `/api/cron/etims-submit` | Every 6h | Drain eTIMS queue (sandbox/live modes) |
+| `/api/cron/complete-bookings` | Daily 03:00 UTC | Past stays → `COMPLETED` + review token |
+| `/api/cron/etims-submit` | Daily 03:15 UTC | Drain eTIMS queue (sandbox/live modes) |

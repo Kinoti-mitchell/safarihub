@@ -4,7 +4,7 @@ import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 
 /**
  * Drain the eTIMS queue for sandbox/live modes.
- * Vercel Cron: every 6 hours (see vercel.json).
+ * Vercel Cron: daily on Hobby (see vercel.json).
  */
 export async function GET(request: Request) {
   try {

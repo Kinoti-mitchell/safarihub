@@ -5,7 +5,7 @@ import { createId } from "@/lib/ids";
  * Flip past, still-active bookings to COMPLETED so guests can leave reviews and
  * providers see accurate history.
  *
- * Prefer the hourly cron (`/api/cron/complete-bookings`). Also called
+ * Prefer the scheduled cron (`/api/cron/complete-bookings`). Also called
  * opportunistically when a traveler or provider lists bookings.
  * Best-effort when scoped; cron path throws on DB errors.
  */

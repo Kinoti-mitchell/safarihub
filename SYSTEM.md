@@ -79,7 +79,7 @@ Commission on payouts, listing publish fee, paid boosts, featured carousel, opti
 2. Availability and VAT are calculated; guest details are stored on the booking.
 3. Status path: `PENDING` → payment → `CONFIRMED` / `RESERVED` (cash may defer payment).
 4. Cancel restores room inventory when applicable.
-5. After checkout date, bookings move to `COMPLETED` (hourly cron + opportunistic list refresh) and receive a `reviewToken` when needed.
+5. After checkout date, bookings move to `COMPLETED` (daily cron + opportunistic list refresh) and receive a `reviewToken` when needed.
 6. Access via account or booking `accessToken` manage link.
 
 **Statuses:** `PENDING` · `RESERVED` · `CONFIRMED` · `CANCELLED` · `COMPLETED` · `NO_SHOW`
@@ -137,11 +137,11 @@ Providers queue paid receipts with a receipt number (`EtimsSubmission`). Platfor
 | **sandbox** | On queue (and via cron), assign a sandbox KRA ref and mark `SUBMITTED` |
 | **live** | POST JSON receipt to `compliance.etimsApiUrl` with Bearer `compliance.etimsApiKey` |
 
-Cron: `/api/cron/etims-submit` every 6 hours drains `QUEUED` rows in sandbox/live modes.
+Cron: `/api/cron/etims-submit` daily (Hobby) drains `QUEUED` rows in sandbox/live modes.
 
 ### 4.9 Booking completion (cron)
 
-- **Hourly:** `GET/POST /api/cron/complete-bookings` — past `CONFIRMED`/`RESERVED` with `checkOut` in the past → `COMPLETED`
+- **Daily (03:00 UTC on Hobby):** `GET/POST /api/cron/complete-bookings` — past `CONFIRMED`/`RESERVED` with `checkOut` in the past → `COMPLETED`
 - Also runs opportunistically when a traveler or provider loads their booking list
 - Authorize with `Authorization: Bearer $CRON_SECRET` (required in production)
 
