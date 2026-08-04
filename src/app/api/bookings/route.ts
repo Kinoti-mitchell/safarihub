@@ -26,16 +26,25 @@ export async function GET() {
     }
 
     await autoCompletePastBookings({ travelerId: session.user.id });
-    const { data: bookings, error } = await db
-      .from("Booking")
-      .select(
-        "*, listing:Listing(*, media:Media(*), county:County(*)), roomType:RoomType(*), review:Review(*)",
-      )
-      .eq("travelerId", session.user.id)
-      .order("createdAt", { ascending: false })
-      .limit(1, { referencedTable: "listing.media" });
+    const [{ data: bookings, error }, { data: packageBookings, error: pkgError }] =
+      await Promise.all([
+        db
+          .from("Booking")
+          .select(
+            "*, listing:Listing(*, media:Media(*), county:County(*)), roomType:RoomType(*), review:Review(*)",
+          )
+          .eq("travelerId", session.user.id)
+          .order("createdAt", { ascending: false })
+          .limit(1, { referencedTable: "listing.media" }),
+        db
+          .from("PackageBooking")
+          .select("*, package:TravelPackage(id, title, days, price)")
+          .eq("travelerId", session.user.id)
+          .order("createdAt", { ascending: false }),
+      ]);
     if (error) throw error;
-    return jsonOk({ bookings });
+    if (pkgError) throw pkgError;
+    return jsonOk({ bookings, packageBookings: packageBookings ?? [] });
   } catch (error) {
     return handleRouteError(error);
   }
@@ -59,6 +68,8 @@ const createSchema = z.object({
   guestName: z.string().min(2).max(120).optional(),
   guestEmail: z.string().email().optional(),
   guestPhone: z.string().optional(),
+  /** Redeem loyalty points (members only) */
+  loyaltyPoints: z.number().int().min(0).optional(),
   card: z
     .object({
       number: z.string().min(12),
@@ -75,30 +86,31 @@ export async function POST(request: Request) {
     const body = createSchema.parse(await request.json());
 
     const isMember = Boolean(session?.user);
-    let guestName: string | null = null;
-    let guestEmail: string | null = null;
-    let guestPhone: string | null = null;
+    // Prefer checkout-form details (name/email/phone the tourist typed).
+    // Fall back to the member profile only when a field was left blank.
+    const guestName =
+      body.guestName?.trim() ||
+      (isMember ? session?.user?.name?.trim() || null : null);
+    const guestEmailRaw =
+      body.guestEmail?.trim() ||
+      (isMember ? session?.user?.email?.trim() || null : null);
+    const guestEmail = guestEmailRaw ? guestEmailRaw.toLowerCase() : null;
 
-    if (!isMember) {
-      if (!body.guestName?.trim() || !body.guestEmail?.trim()) {
-        return jsonError(
-          "Enter your name and email to book as a guest, or log in as a member",
-          400,
-        );
+    if (!guestName || !guestEmail) {
+      return jsonError(
+        "Enter your name and email so we can send your booking details",
+        400,
+      );
+    }
+
+    let guestPhone: string | null = null;
+    const phoneRaw = body.guestPhone?.trim() || body.phone?.trim() || "";
+    if (phoneRaw) {
+      const phoneResult = validateKenyanPhone(phoneRaw);
+      if (body.guestPhone?.trim() && phoneResult.error) {
+        return jsonError(phoneResult.error, 400);
       }
-      guestName = body.guestName.trim();
-      guestEmail = body.guestEmail.trim().toLowerCase();
-      if (body.guestPhone?.trim()) {
-        const phoneResult = validateKenyanPhone(body.guestPhone);
-        if (phoneResult.error) return jsonError(phoneResult.error, 400);
-        guestPhone = phoneResult.phone;
-      } else if (body.phone?.trim()) {
-        const phoneResult = validateKenyanPhone(body.phone);
-        if (!phoneResult.error) guestPhone = phoneResult.phone;
-      }
-    } else if (session?.user) {
-      guestName = session.user.name || null;
-      guestEmail = session.user.email || null;
+      if (!phoneResult.error) guestPhone = phoneResult.phone;
     }
 
     const settings = await getPlatformSettings();
@@ -153,6 +165,18 @@ export async function POST(request: Request) {
       return jsonError("Check-in cannot be before today", 400);
     }
 
+    const minLeadHours = numberSetting(settings, "booking.minLeadTimeHours");
+    if (minLeadHours > 0) {
+      const hoursUntilCheckIn =
+        (checkInDay.getTime() - Date.now()) / (1000 * 60 * 60);
+      if (hoursUntilCheckIn < minLeadHours) {
+        return jsonError(
+          `Bookings require at least ${minLeadHours} hours notice before check-in`,
+          400,
+        );
+      }
+    }
+
     let checkOutDay: Date;
     let nights: number;
     let dayStartTime: string | null = null;
@@ -204,7 +228,36 @@ export async function POST(request: Request) {
 
     const subtotalAmount = unitPrice * nights * body.roomsBooked;
     const money = await breakdownWithVat(subtotalAmount);
-    const totalAmount = money.total;
+    let totalAmount = money.total;
+    let loyaltyPointsUsed = 0;
+    let loyaltyDiscountKes = 0;
+
+    if (
+      body.loyaltyPoints &&
+      body.loyaltyPoints > 0 &&
+      session?.user &&
+      boolSetting(settings, "flags.loyaltyEnabled")
+    ) {
+      const pointValue = numberSetting(settings, "loyalty.pointValue") || 1;
+      const { data: loyaltyAccount } = await db
+        .from("LoyaltyAccount")
+        .select("id, points")
+        .eq("userId", session.user.id)
+        .maybeSingle();
+      const available = (loyaltyAccount?.points as number) || 0;
+      const requested = body.loyaltyPoints;
+      const maxByBalance = available;
+      const maxByTotal =
+        pointValue > 0 ? Math.floor(totalAmount / pointValue) : 0;
+      loyaltyPointsUsed = Math.min(requested, maxByBalance, maxByTotal);
+      if (loyaltyPointsUsed > 0) {
+        loyaltyDiscountKes = Math.min(
+          loyaltyPointsUsed * pointValue,
+          totalAmount,
+        );
+        totalAmount = Math.max(0, totalAmount - loyaltyDiscountKes);
+      }
+    }
 
     const minAmt = numberSetting(settings, "payments.minBookingAmount");
     const maxAmt = numberSetting(settings, "payments.maxBookingAmount");
@@ -295,7 +348,38 @@ export async function POST(request: Request) {
       throw bookingError;
     }
 
-    // Payment (+ loyalty, payout, notifications) is handled inside the payment
+    let loyaltyAccountId: string | null = null;
+    if (loyaltyPointsUsed > 0 && session?.user) {
+      const { data: loyaltyAccount } = await db
+        .from("LoyaltyAccount")
+        .select("id, points")
+        .eq("userId", session.user.id)
+        .maybeSingle();
+      if (
+        loyaltyAccount &&
+        (loyaltyAccount.points as number) >= loyaltyPointsUsed
+      ) {
+        loyaltyAccountId = loyaltyAccount.id as string;
+        await db
+          .from("LoyaltyAccount")
+          .update({
+            points: (loyaltyAccount.points as number) - loyaltyPointsUsed,
+            updatedAt: now,
+          })
+          .eq("id", loyaltyAccountId);
+        await db.from("LoyaltyLedger").insert({
+          id: createId(),
+          accountId: loyaltyAccountId,
+          points: -loyaltyPointsUsed,
+          reason: `Redeemed on booking ${reference}`,
+        });
+      } else {
+        loyaltyPointsUsed = 0;
+        loyaltyDiscountKes = 0;
+      }
+    }
+
+    // Payment (+ loyalty earn, payout, notifications) is handled inside the payment
     // pipeline so the M-Pesa callback and the sandbox path stay consistent.
     const paid = await processPayment({
       bookingId,
@@ -307,6 +391,28 @@ export async function POST(request: Request) {
     });
 
     if (paid.paymentStatus === "FAILED") {
+      if (loyaltyAccountId && loyaltyPointsUsed > 0) {
+        const { data: acct } = await db
+          .from("LoyaltyAccount")
+          .select("points")
+          .eq("id", loyaltyAccountId)
+          .maybeSingle();
+        if (acct) {
+          await db
+            .from("LoyaltyAccount")
+            .update({
+              points: (acct.points as number) + loyaltyPointsUsed,
+              updatedAt: new Date().toISOString(),
+            })
+            .eq("id", loyaltyAccountId);
+          await db.from("LoyaltyLedger").insert({
+            id: createId(),
+            accountId: loyaltyAccountId,
+            points: loyaltyPointsUsed,
+            reason: `Refunded redeem (payment failed) ${reference}`,
+          });
+        }
+      }
       return jsonError(paid.message || "Payment failed", 402);
     }
 
@@ -324,6 +430,10 @@ export async function POST(request: Request) {
         receiptUrl: `/receipts/${bookingId}?t=${accessToken}`,
         confirmationUrl: `/bookings/${bookingId}?t=${accessToken}&confirmed=1`,
         guestCheckout: !session?.user,
+        loyalty:
+          loyaltyPointsUsed > 0
+            ? { pointsUsed: loyaltyPointsUsed, discountKes: loyaltyDiscountKes }
+            : undefined,
       },
       201,
     );

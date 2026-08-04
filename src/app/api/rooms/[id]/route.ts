@@ -47,6 +47,10 @@ export async function PATCH(request: Request, { params }: Params) {
           .optional(),
         maxGuests: z.number().int().min(1).optional(),
         amenities: z.array(z.string()).optional(),
+        capacityUnit: z
+          .enum(["rooms", "seats", "vehicles", "slots", "packages"])
+          .optional()
+          .nullable(),
       })
       .parse(await request.json());
 
@@ -61,6 +65,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (body.offerKind != null) patch.offerKind = body.offerKind;
     if (body.maxGuests != null) patch.maxGuests = body.maxGuests;
     if (body.amenities != null) patch.amenities = body.amenities;
+    if (body.capacityUnit !== undefined) patch.capacityUnit = body.capacityUnit;
 
     const { data: updated, error } = await db
       .from("RoomType")

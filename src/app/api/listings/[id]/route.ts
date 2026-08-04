@@ -19,6 +19,7 @@ import {
   normalizeVenueTypes,
   primaryCategory,
 } from "@/lib/amenities";
+import { parseBulletList } from "@/lib/tour-listing";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -95,6 +96,11 @@ const patchSchema = z.object({
   website: z.string().max(300).optional().nullable(),
   menuUrl: z.string().max(500).optional().nullable(),
   openingHours: z.string().max(500).optional().nullable(),
+  durationDays: z.number().int().min(0).max(90).optional().nullable(),
+  durationHours: z.number().int().min(0).max(72).optional().nullable(),
+  meetingPoint: z.string().max(400).optional().nullable(),
+  inclusions: z.union([z.array(z.string()), z.string()]).optional(),
+  exclusions: z.union([z.array(z.string()), z.string()]).optional(),
   /** M-Pesa confirmation for pay-to-publish */
   paymentRef: z.string().min(4).max(80).optional(),
   paymentNote: z.string().max(500).optional(),
@@ -243,11 +249,23 @@ export async function PATCH(request: Request, { params }: Params) {
     if (body.venueTypes != null) {
       patch.venueTypes = normalizeVenueTypes(body.venueTypes);
     }
-    for (const key of ["phone", "website", "menuUrl", "openingHours"] as const) {
+    for (const key of ["phone", "website", "menuUrl", "openingHours", "meetingPoint"] as const) {
       if (body[key] !== undefined) {
         const v = body[key];
         patch[key] = typeof v === "string" ? v.trim() || null : null;
       }
+    }
+    if (body.durationDays !== undefined) {
+      patch.durationDays = body.durationDays;
+    }
+    if (body.durationHours !== undefined) {
+      patch.durationHours = body.durationHours;
+    }
+    if (body.inclusions !== undefined) {
+      patch.inclusions = parseBulletList(body.inclusions);
+    }
+    if (body.exclusions !== undefined) {
+      patch.exclusions = parseBulletList(body.exclusions);
     }
 
     const { data: updated, error: updateError } = await db

@@ -20,9 +20,18 @@ import {
   type StaffRole,
 } from "@/lib/staff-roles";
 import {
+  boolSetting,
   getPlatformSettings,
   numberSetting,
 } from "@/lib/settings";
+
+async function staffingDisabledResponse() {
+  const settings = await getPlatformSettings();
+  if (!boolSetting(settings, "flags.staffingEnabled")) {
+    return jsonError("Staffing is currently disabled", 403);
+  }
+  return null;
+}
 
 type ManageableBiz = {
   id: string;
@@ -67,6 +76,8 @@ async function assertCanManageProviders(
 
 export async function GET() {
   try {
+    const disabled = await staffingDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     const access = await requireProviderAccess(session.user.id);
@@ -149,6 +160,8 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
+    const disabled = await staffingDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     // Active business must be approved to open staffing operations
@@ -311,6 +324,8 @@ export async function POST(req: Request) {
 /** Update a member's role on a business. */
 export async function PATCH(req: Request) {
   try {
+    const disabled = await staffingDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     await requireApprovedProviderAccess(session.user.id);
@@ -371,6 +386,8 @@ export async function PATCH(req: Request) {
 /** Remove staff from a business. */
 export async function DELETE(req: Request) {
   try {
+    const disabled = await staffingDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     await requireApprovedProviderAccess(session.user.id);

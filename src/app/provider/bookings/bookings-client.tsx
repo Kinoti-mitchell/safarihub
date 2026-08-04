@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { ProviderBookingsCalendar } from "@/components/provider-bookings-calendar";
 
 export type ProviderBookingRow = {
   id: string;
@@ -78,6 +79,7 @@ export function ProviderBookingsClient({
   const [cashFor, setCashFor] = useState<string | null>(null);
   const [cashAmount, setCashAmount] = useState("");
   const [cashNote, setCashNote] = useState("");
+  const [view, setView] = useState<"list" | "calendar">("list");
 
   function handleAuthFailure() {
     router.replace(
@@ -135,6 +137,37 @@ export function ProviderBookingsClient({
     setMsg(null);
   }
 
+  async function confirmCard(booking: ProviderBookingRow) {
+    setBusyId(booking.id);
+    setError(null);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/card`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!res.ok) {
+        setError(data.error || "Could not confirm card payment");
+        return;
+      }
+      setMsg(
+        `Card confirmed for ${booking.reference}. Receipt ${data.booking?.receiptNumber || ""} ready.`,
+      );
+      void reload();
+    } catch {
+      setError("Network error — is the server running?");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function submitCash(e: FormEvent, booking: ProviderBookingRow) {
     e.preventDefault();
     const amountPaid = Math.round(Number(cashAmount));
@@ -177,20 +210,53 @@ export function ProviderBookingsClient({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-      <h1 className="font-display text-3xl font-semibold text-lake">Bookings</h1>
-      <p className="mt-2 text-ink-muted">
-        Open a booking to see the guest, stay dates, rooms, and payment. Confirm
-        stays and collect cash on arrival from here too.
-      </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-lake">
+            Bookings
+          </h1>
+          <p className="mt-2 text-ink-muted">
+            Open a booking for guest details and payment. Use the calendar for
+            check-ins and tour departure days.
+          </p>
+        </div>
+        <div className="flex rounded-lg border border-line bg-white/70 p-0.5 text-sm">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={`rounded-md px-3 py-1.5 font-medium ${
+              view === "list" ? "bg-lake text-sand" : "text-ink-muted"
+            }`}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("calendar")}
+            className={`rounded-md px-3 py-1.5 font-medium ${
+              view === "calendar" ? "bg-lake text-sand" : "text-ink-muted"
+            }`}
+          >
+            Calendar
+          </button>
+        </div>
+      </div>
       {msg && <p className="mt-4 text-sm text-lake-bright">{msg}</p>}
       {error && <p className="mt-4 text-red-700">{error}</p>}
-      <div className="mt-8 space-y-3">
+      {view === "calendar" && (
+        <ProviderBookingsCalendar bookings={bookings} />
+      )}
+      <div className={`mt-8 space-y-3 ${view === "calendar" ? "hidden" : ""}`}>
         {bookings.map((b) => {
           const due = b.totalAmount;
           const vat = b.vatAmount ?? 0;
           const needsCash =
             b.paymentMethod === "CASH_ON_ARRIVAL" &&
             b.paymentStatus !== "PAID" &&
+            !["CANCELLED", "NO_SHOW"].includes(b.status);
+          const needsCardConfirm =
+            b.paymentMethod === "CARD" &&
+            b.paymentStatus === "PENDING" &&
             !["CANCELLED", "NO_SHOW"].includes(b.status);
           const hasReceipt = b.paymentStatus === "PAID";
           const phone = b.guestPhone || b.traveler?.phone;
@@ -255,6 +321,16 @@ export function ProviderBookingsClient({
                       className="rounded-md bg-sun px-3 py-1.5 text-xs font-semibold text-ink"
                     >
                       Record cash paid
+                    </button>
+                  )}
+                  {needsCardConfirm && (
+                    <button
+                      type="button"
+                      disabled={busyId === b.id}
+                      onClick={() => void confirmCard(b)}
+                      className="rounded-md bg-sun px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-50"
+                    >
+                      Confirm card paid
                     </button>
                   )}
                   {hasReceipt && (

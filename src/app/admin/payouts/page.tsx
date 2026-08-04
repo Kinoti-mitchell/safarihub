@@ -15,11 +15,18 @@ type AdminPayout = {
 
 type Toast = { id: number; message: string; tone: "success" | "error" };
 
-const STATUSES = ["PENDING", "PROCESSING", "PAID", "FAILED"] as const;
+const STATUSES = [
+  "PENDING",
+  "PROCESSING",
+  "ON_HOLD",
+  "PAID",
+  "FAILED",
+] as const;
 
 const STATUS_STYLE: Record<string, string> = {
   PENDING: "bg-sun/20 text-ink",
   PROCESSING: "bg-lake/10 text-lake",
+  ON_HOLD: "bg-amber-100 text-amber-900",
   PAID: "bg-lake text-sand",
   FAILED: "bg-red-100 text-red-700",
 };
@@ -34,6 +41,8 @@ export default function AdminPayoutsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const pushToast = useCallback((message: string, tone: Toast["tone"]) => {
@@ -96,6 +105,46 @@ export default function AdminPayoutsPage() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function runBatch(mode: "sendMpesa" | "markPaid") {
+    if (!selected.size) {
+      pushToast("Select at least one pending payout", "error");
+      return;
+    }
+    setBatchBusy(true);
+    try {
+      const res = await fetch("/api/admin/payouts/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payoutIds: Array.from(selected),
+          sendMpesa: mode === "sendMpesa",
+          markPaid: mode === "markPaid",
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pushToast(body.error || "Batch failed", "error");
+        return;
+      }
+      pushToast(body.summary || "Batch complete", "success");
+      setSelected(new Set());
+      await load();
+    } catch {
+      pushToast("Network error — please try again", "error");
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
   async function sendMpesa(payout: AdminPayout) {
     setBusyId(payout.id);
     try {
@@ -139,9 +188,43 @@ export default function AdminPayoutsPage() {
 
       <h1 className="font-display text-3xl font-semibold text-lake">Payouts</h1>
       <p className="mt-1 text-sm text-ink-muted">
-        Provider earnings after commission. Send via M-Pesa B2C (when Daraja is
-        configured) or mark paid manually.
+        Settlement runbook: select pending rows → batch Pay M-Pesa or Mark paid.
+        Guards block KYC rejects, missing payout phone, disputes, and holds.
       </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={batchBusy || !selected.size}
+          onClick={() => void runBatch("sendMpesa")}
+          className="rounded-md bg-lake px-3 py-2 text-sm font-semibold text-sand disabled:opacity-50"
+        >
+          Batch Pay M-Pesa ({selected.size})
+        </button>
+        <button
+          type="button"
+          disabled={batchBusy || !selected.size}
+          onClick={() => void runBatch("markPaid")}
+          className="rounded-md border border-line px-3 py-2 text-sm disabled:opacity-50"
+        >
+          Batch mark paid
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setSelected(
+              new Set(
+                payouts
+                  .filter((p) => p.status === "PENDING")
+                  .map((p) => p.id),
+              ),
+            )
+          }
+          className="rounded-md border border-line px-3 py-2 text-sm"
+        >
+          Select all pending
+        </button>
+      </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-line bg-white/70 p-4">
@@ -221,6 +304,7 @@ export default function AdminPayoutsPage() {
           <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-ink-muted">
+                <th className="px-4 py-3 font-medium"> </th>
                 <th className="px-4 py-3 font-medium">Provider</th>
                 <th className="px-4 py-3 font-medium">Booking</th>
                 <th className="px-4 py-3 font-medium">Net</th>
@@ -232,6 +316,15 @@ export default function AdminPayoutsPage() {
             <tbody>
               {payouts.map((p) => (
                 <tr key={p.id} className="border-b border-line/60 last:border-0">
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(p.id)}
+                      disabled={p.status === "PAID" || p.status === "ON_HOLD"}
+                      onChange={() => toggleSelect(p.id)}
+                      aria-label={`Select ${p.reference}`}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium">{p.providerName}</td>
                   <td className="px-4 py-3">
                     <p className="font-mono text-xs">{p.reference}</p>

@@ -18,6 +18,7 @@ const schema = z.object({
     .default("ROOM"),
   maxGuests: z.number().int().min(1).default(2),
   amenities: z.array(z.string()).optional(),
+  capacityUnit: z.enum(["rooms", "seats", "vehicles", "slots", "packages"]).optional().nullable(),
 });
 
 export async function POST(request: Request, { params }: Params) {
@@ -55,6 +56,15 @@ export async function POST(request: Request, { params }: Params) {
         offerKind: body.offerKind ?? "ROOM",
         maxGuests: body.maxGuests,
         amenities: body.amenities || [],
+        capacityUnit:
+          body.capacityUnit ??
+          (body.offerKind === "ACTIVITY"
+            ? "seats"
+            : body.offerKind === "PACKAGE"
+              ? "packages"
+              : body.offerKind === "ROOM"
+                ? "rooms"
+                : "slots"),
         createdAt: now,
         updatedAt: now,
       })

@@ -1,33 +1,65 @@
 import { db } from "@/lib/supabase";
+import { createId } from "@/lib/ids";
 
 /**
  * Flip past, still-active bookings to COMPLETED so guests can leave reviews and
- * providers see accurate history. Called opportunistically when bookings are
- * listed (there is no cron in this deployment). Scoped to a traveler or a
- * provider's listings to keep it cheap. Best-effort; never throws.
+ * providers see accurate history.
+ *
+ * Prefer the hourly cron (`/api/cron/complete-bookings`). Also called
+ * opportunistically when a traveler or provider lists bookings.
+ * Best-effort when scoped; cron path throws on DB errors.
  */
 export async function autoCompletePastBookings(scope: {
   travelerId?: string;
   listingIds?: string[];
-}): Promise<void> {
+  /** Platform-wide (cron). Caps batch size. */
+  all?: boolean;
+  limit?: number;
+}): Promise<{ completed: number }> {
+  const soft = !scope.all;
   try {
     const nowIso = new Date().toISOString();
+    const limit = scope.limit ?? (scope.all ? 200 : 50);
     let query = db
       .from("Booking")
-      .update({ status: "COMPLETED", updatedAt: nowIso })
+      .select("id, reviewToken")
       .lt("checkOut", nowIso)
-      .in("status", ["CONFIRMED", "RESERVED"]);
+      .in("status", ["CONFIRMED", "RESERVED"])
+      .limit(limit);
 
-    if (scope.travelerId) {
+    if (scope.all) {
+      // no extra filter
+    } else if (scope.travelerId) {
       query = query.eq("travelerId", scope.travelerId);
     } else if (scope.listingIds && scope.listingIds.length > 0) {
       query = query.in("listingId", scope.listingIds);
     } else {
-      return;
+      return { completed: 0 };
     }
-    await query;
+
+    const { data: rows, error } = await query;
+    if (error) throw error;
+    let completed = 0;
+    for (const row of rows ?? []) {
+      const patch: Record<string, unknown> = {
+        status: "COMPLETED",
+        updatedAt: nowIso,
+      };
+      if (!(row.reviewToken as string | null)) {
+        patch.reviewToken = createId();
+      }
+      const { error: upErr } = await db
+        .from("Booking")
+        .update(patch)
+        .eq("id", row.id as string);
+      if (upErr) throw upErr;
+      completed += 1;
+    }
+    return { completed };
   } catch (error) {
     console.error("autoCompletePastBookings failed", error);
+    if (!soft) throw error;
+    return { completed: 0 };
   }
 }
 

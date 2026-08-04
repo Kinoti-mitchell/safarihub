@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { dashboardPathForRole } from "@/lib/rbac";
 import { getPlatformSettings, boolSetting } from "@/lib/settings";
 import { NavLink } from "@/components/nav-link";
-import { NotificationBell } from "@/components/notification-bell";
+import { HeaderAuth } from "@/components/header-auth";
 import { LocaleToggle, LOCALE_COOKIE } from "@/components/locale-toggle";
 import { parseLocale, t } from "@/lib/i18n";
 
@@ -30,6 +30,7 @@ export async function SiteHeader() {
   const dash = session?.user
     ? dashboardPathForRole(session.user.role)
     : "/login";
+  const bindSessionToTab = boolSetting(settings, "security.bindSessionToTab");
   const cookieStore = await cookies();
   const locale = parseLocale(cookieStore.get(LOCALE_COOKIE)?.value);
 
@@ -79,31 +80,19 @@ export async function SiteHeader() {
               {t(locale, "packages")}
             </NavLink>
           )}
+          <NavLink href="/trip" className="hidden sm:inline-block">
+            {t(locale, "tripBuilder")}
+          </NavLink>
           <span className="hidden sm:inline-flex">
             <LocaleToggle initial={locale} />
           </span>
-          {session?.user ? (
-            <>
-              <NotificationBell />
-              <NavLink href={dash}>Dashboard</NavLink>
-              <Link
-                href="/logout"
-                className="rounded-full bg-lake px-3.5 py-2 text-sand shadow-sm transition hover:bg-lake-bright hover:shadow-md"
-              >
-                Sign out
-              </Link>
-            </>
-          ) : (
-            <>
-              <NavLink href="/login">Log in</NavLink>
-              <Link
-                href="/register"
-                className="rounded-full bg-sun px-3.5 py-2 text-ink shadow-sm transition hover:brightness-110"
-              >
-                Join
-              </Link>
-            </>
-          )}
+          <HeaderAuth
+            dash={dash}
+            loginLabel={t(locale, "login")}
+            joinLabel={t(locale, "join")}
+            myTripsLabel={t(locale, "myTrips")}
+            bindSessionToTab={bindSessionToTab}
+          />
         </nav>
       </div>
     </header>

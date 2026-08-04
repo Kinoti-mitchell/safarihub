@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { LocationPicker } from "@/components/location-picker";
 import { ListingCategoryPicker } from "@/components/listing-category-picker";
 import {
+  categoriesForBusinessType,
   kindsFromCategories,
   type ListingCategoryKey,
 } from "@/lib/amenities";
@@ -21,6 +22,7 @@ export default function NewListingSetupPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<ListingCategoryKey[]>(["STAY"]);
+  const [tourTemplate, setTourTemplate] = useState(false);
   const [amenities, setAmenities] = useState<string[]>([]);
   const [loc, setLoc] = useState({
     countryId: "",
@@ -30,6 +32,27 @@ export default function NewListingSetupPage() {
     longitude: null as number | null,
     locationConfirmed: false,
   });
+
+  useEffect(() => {
+    void fetch("/api/provider/business")
+      .then((r) => r.json())
+      .then((d) => {
+        const type = d.provider?.businessType as string | undefined;
+        const suggested = categoriesForBusinessType(type);
+        if (suggested.length) {
+          setCategories(suggested);
+          setTourTemplate(
+            type === "TOUR_OPERATOR" ||
+              type === "TRANSFER" ||
+              suggested.includes("EXPLORE") ||
+              suggested.includes("MOVE"),
+          );
+        }
+      })
+      .catch(() => {
+        /* keep STAY default */
+      });
+  }, []);
 
   async function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -127,8 +150,16 @@ export default function NewListingSetupPage() {
             Basics
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Name your place and where it is. Next steps are photos and offers.
+            {tourTemplate
+              ? "Name the tour or transfer and where guests meet. Photos, seats, and departures come next."
+              : "Name your place and where it is. Next steps are photos and offers."}
           </p>
+          {tourTemplate && (
+            <p className="mt-2 rounded-md border border-lake/20 bg-lake/5 px-3 py-2 text-xs text-ink">
+              Tour template: category set to Explore / Move. Add duration,
+              meeting point, and inclusions on the next Contact step.
+            </p>
+          )}
         </div>
 
         <label className="block text-sm font-medium text-ink">
@@ -137,7 +168,11 @@ export default function NewListingSetupPage() {
             name="title"
             required
             minLength={3}
-            placeholder="Property or experience name"
+            placeholder={
+              tourTemplate
+                ? "e.g. Full-day Amboseli game drive"
+                : "Property or experience name"
+            }
             className="mt-1.5 w-full rounded-md border border-line px-3 py-2.5 font-normal"
           />
         </label>
@@ -156,11 +191,15 @@ export default function NewListingSetupPage() {
         />
 
         <label className="block text-sm font-medium text-ink">
-          Street / landmark{" "}
+          {tourTemplate ? "Meeting area / landmark" : "Street / landmark"}{" "}
           <span className="font-normal text-ink-muted">(optional)</span>
           <input
             name="address"
-            placeholder="Near main stage, opposite the market…"
+            placeholder={
+              tourTemplate
+                ? "e.g. Outside Sarova Stanley, Kenyatta Ave"
+                : "Near main stage, opposite the market…"
+            }
             className="mt-1.5 w-full rounded-md border border-line px-3 py-2.5 font-normal"
           />
         </label>
@@ -170,7 +209,11 @@ export default function NewListingSetupPage() {
           <span className="font-normal text-ink-muted">(optional)</span>
           <textarea
             name="description"
-            placeholder="What makes this place worth booking?"
+            placeholder={
+              tourTemplate
+                ? "What guests will see and do on this trip…"
+                : "What makes this place worth booking?"
+            }
             className="mt-1.5 w-full rounded-md border border-line px-3 py-2.5 font-normal"
             rows={3}
           />

@@ -37,6 +37,10 @@ export async function GET() {
       reviewsRes,
       countiesRes,
       topListingsRes,
+      paymentsRes,
+      disputesRes,
+      refundsRes,
+      etimsRes,
     ] = await Promise.all([
       db.from("Booking").select("status, paymentStatus, totalAmount, createdAt"),
       db.from("User").select("role"),
@@ -47,6 +51,10 @@ export async function GET() {
       db
         .from("Listing")
         .select("id, title, provider:Provider(name), bookings:Booking(count)"),
+      db.from("Payment").select("method, status"),
+      db.from("Dispute").select("status"),
+      db.from("Refund").select("status, amount"),
+      db.from("EtimsSubmission").select("status"),
     ]);
 
     const bookings = (bookingsRes.data ?? []) as Array<{
@@ -152,6 +160,52 @@ export async function GET() {
       .sort((a, b) => b.listings - a.listings)
       .slice(0, 6);
 
+    const payments = (paymentsRes.data ?? []) as Array<{
+      method: string;
+      status: string;
+    }>;
+    const disputes = (disputesRes.data ?? []) as Array<{ status: string }>;
+    const refunds = (refundsRes.data ?? []) as Array<{
+      status: string;
+      amount: number;
+    }>;
+    const etims = (etimsRes.data ?? []) as Array<{ status: string }>;
+
+    const mpesa = payments.filter((p) => p.method === "MPESA");
+    const mpesaPaid = mpesa.filter((p) => p.status === "PAID").length;
+    const mpesaFailed = mpesa.filter((p) => p.status === "FAILED").length;
+    const mpesaAttempted = mpesaPaid + mpesaFailed || 1;
+    const refundedBookings = bookings.filter(
+      (b) => b.paymentStatus === "REFUNDED",
+    ).length;
+    const noShows = bookings.filter((b) => b.status === "NO_SHOW").length;
+    const openDisputes = disputes.filter((d) =>
+      ["OPEN", "HOLDING"].includes(d.status),
+    ).length;
+    const payoutOnHold = payouts
+      .filter((p) => p.status === "ON_HOLD")
+      .reduce((s, p) => s + (p.amount || 0), 0);
+    const refundVolume = refunds
+      .filter((r) => r.status === "COMPLETED" || r.status === "PROCESSING")
+      .reduce((s, r) => s + (r.amount || 0), 0);
+    const etimsFailed = etims.filter((e) => e.status === "FAILED").length;
+    const etimsQueued = etims.filter((e) => e.status === "QUEUED").length;
+
+    // Simple conversion proxy: paid / all bookings created
+    const paidBookings = bookings.filter((b) => isPaid(b.paymentStatus)).length;
+    const conversionRate =
+      bookings.length === 0
+        ? 0
+        : Math.round((paidBookings / bookings.length) * 1000) / 10;
+
+    // Category GMV (paid bookings by listing category would need join; use listing mix + revenue share proxy)
+    const gmvByCategory = Array.from(categoryMap.entries()).map(
+      ([category, v]) => ({
+        category,
+        listings: v.count,
+      }),
+    );
+
     return jsonOk({
       totals: {
         users: users.length,
@@ -164,6 +218,20 @@ export async function GET() {
         reviews: reviews.length,
         countiesLive: counties.filter((c) => c.isLive).length,
         countiesTotal: counties.length,
+      },
+      ops: {
+        conversionRate,
+        mpesaSuccessRate:
+          Math.round((mpesaPaid / mpesaAttempted) * 1000) / 10,
+        mpesaPaid,
+        mpesaFailed,
+        refundedBookings,
+        refundVolume,
+        noShows,
+        openDisputes,
+        payoutOnHold,
+        etimsQueued,
+        etimsFailed,
       },
       monthly,
       bookingsByStatus: Array.from(bookingStatusMap.entries()).map(
@@ -188,6 +256,7 @@ export async function GET() {
       categoryBreakdown: Array.from(categoryMap.entries()).map(
         ([category, v]) => ({ category, count: v.count }),
       ),
+      gmvByCategory,
       topListings,
       topCounties,
     });

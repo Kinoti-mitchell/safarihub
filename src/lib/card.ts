@@ -112,9 +112,9 @@ const DECLINE_NUMBERS = new Set([
 ]);
 
 /**
- * Sandbox card charge: validates details, never stores the full number, and
- * either confirms or declines. When you wire Stripe/Pesapal later, swap this
- * for a real processor call and keep the same return shape.
+ * Sandbox card charge: validates details, never stores the full PAN, and
+ * confirms or declines using well-known test numbers. Manual mode skips this
+ * and waits for staff confirmation via POST /api/bookings/[id]/card.
  */
 export function chargeCardSandbox(
   card: CardInput,

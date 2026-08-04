@@ -16,6 +16,8 @@ export function CatalogFilters({
     minPrice?: string;
     maxPrice?: string;
     guests?: string;
+    checkIn?: string;
+    checkOut?: string;
     kind?: string;
     amenity?: string;
   };
@@ -39,6 +41,8 @@ export function CatalogFilters({
       "minPrice",
       "maxPrice",
       "guests",
+      "checkIn",
+      "checkOut",
       "kind",
       "amenity",
     ]) {
@@ -46,7 +50,11 @@ export function CatalogFilters({
       if (v) params.set(key, v);
       else params.delete(key);
     }
-    if (!showGuests) params.delete("guests");
+    if (!showGuests) {
+      params.delete("guests");
+      params.delete("checkIn");
+      params.delete("checkOut");
+    }
     const category = searchParams.get("category");
     if (category) params.set("category", category);
     startTransition(() => {
@@ -141,16 +149,36 @@ export function CatalogFilters({
         />
       </label>
       {showGuests && (
-        <label className="block text-sm font-medium text-ink">
-          Guests / seats
-          <input
-            name="guests"
-            type="number"
-            min={1}
-            defaultValue={initial.guests || ""}
-            className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 font-normal outline-none transition focus:border-lake-bright focus:ring-2 focus:ring-lake-bright/30"
-          />
-        </label>
+        <>
+          <label className="block text-sm font-medium text-ink">
+            Check-in
+            <input
+              name="checkIn"
+              type="date"
+              defaultValue={initial.checkIn || ""}
+              className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 font-normal outline-none transition focus:border-lake-bright focus:ring-2 focus:ring-lake-bright/30"
+            />
+          </label>
+          <label className="block text-sm font-medium text-ink">
+            Check-out
+            <input
+              name="checkOut"
+              type="date"
+              defaultValue={initial.checkOut || ""}
+              className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 font-normal outline-none transition focus:border-lake-bright focus:ring-2 focus:ring-lake-bright/30"
+            />
+          </label>
+          <label className="block text-sm font-medium text-ink">
+            Guests / seats
+            <input
+              name="guests"
+              type="number"
+              min={1}
+              defaultValue={initial.guests || ""}
+              className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 font-normal outline-none transition focus:border-lake-bright focus:ring-2 focus:ring-lake-bright/30"
+            />
+          </label>
+        </>
       )}
       <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
         <button

@@ -129,9 +129,27 @@ const ITEMS: NavItem[] = [
         icon: leafIcon,
       },
       {
+        href: "/admin/payments",
+        label: "Payments desk",
+        desc: "STK, refunds, exceptions",
+        icon: leafIcon,
+      },
+      {
         href: "/admin/payouts",
         label: "Payouts",
-        desc: "Settlements",
+        desc: "Settlements & batch B2C",
+        icon: leafIcon,
+      },
+      {
+        href: "/admin/disputes",
+        label: "Disputes",
+        desc: "Holds & resolutions",
+        icon: leafIcon,
+      },
+      {
+        href: "/admin/etims",
+        label: "eTIMS",
+        desc: "Fiscal queue",
         icon: leafIcon,
       },
       {

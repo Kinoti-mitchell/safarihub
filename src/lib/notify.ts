@@ -1,6 +1,7 @@
 import { db } from "@/lib/supabase";
 import { createId } from "@/lib/ids";
 import { sendEmail, appUrl } from "@/lib/email";
+import { boolSetting, getPlatformSettings } from "@/lib/settings";
 
 export type NotificationInput = {
   userId: string;
@@ -33,8 +34,8 @@ export async function notify(input: NotificationInput): Promise<void> {
 
 /**
  * Create an in-app notification AND email the user, when we have their address.
- * `emailFlag` is the settings key that gates the email (checked by the caller
- * via getPlatformSettings before calling if needed). Best-effort, never throws.
+ * `emailFlag` gates outbound email via Admin → Notifications toggles.
+ * Best-effort, never throws.
  */
 export async function notifyAndEmail(input: {
   userId?: string | null;
@@ -43,6 +44,8 @@ export async function notifyAndEmail(input: {
   title: string;
   body?: string;
   href?: string;
+  /** Settings key such as notifications.emailOnBooking — when false, skip email. */
+  emailFlag?: string;
 }): Promise<void> {
   if (input.userId) {
     await notify({
@@ -53,13 +56,21 @@ export async function notifyAndEmail(input: {
       href: input.href,
     });
   }
-  if (input.email) {
+  if (!input.email) return;
+
+  try {
+    if (input.emailFlag) {
+      const settings = await getPlatformSettings();
+      if (!boolSetting(settings, input.emailFlag)) return;
+    }
     const link = input.href ? appUrl(input.href) : appUrl();
     await sendEmail({
       to: input.email,
       subject: input.title,
       text: `${input.body ?? input.title}\n\n${link}`,
     });
+  } catch (error) {
+    console.error("notifyAndEmail email failed", error);
   }
 }
 

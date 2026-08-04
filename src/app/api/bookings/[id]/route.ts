@@ -4,8 +4,10 @@ import { db } from "@/lib/supabase";
 import { getProviderForUser } from "@/lib/provider";
 import { getBookingForProviderReview } from "@/lib/provider-bookings";
 import { cancelBooking } from "@/lib/cancel-booking";
+import { markNoShow } from "@/lib/disputes";
 import { notifyAndEmail } from "@/lib/notify";
 import { emailTouristBookingConfirmed } from "@/lib/booking-emails";
+import { createId } from "@/lib/ids";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 
 type Params = { params: Promise<{ id: string }> };
@@ -96,17 +98,11 @@ export async function PATCH(request: Request, { params }: Params) {
     if (body.status === "CANCELLED") {
       // Guest cancel via magic link token (same as receipt access).
       if (tokenOk && !session?.user) {
-        const checkIn = new Date(booking.checkIn as string);
-        if (checkIn.getTime() <= Date.now()) {
-          return jsonError(
-            "Too late to cancel — contact support or the host for help",
-            400,
-          );
-        }
         const result = await cancelBooking({
           bookingId: id,
           cancelledById: null,
           reason: body.reason,
+          asTraveler: true,
         });
         if (!result.ok) return jsonError(result.error, result.status);
         const { data: updated } = await db
@@ -121,19 +117,11 @@ export async function PATCH(request: Request, { params }: Params) {
       if (!isAdmin && !isOwner && !isTraveler) {
         return jsonError("Forbidden", 403);
       }
-      if (isTraveler && !isOwner && !isAdmin) {
-        const checkIn = new Date(booking.checkIn as string);
-        if (checkIn.getTime() <= Date.now()) {
-          return jsonError(
-            "Too late to cancel — contact the provider for help",
-            400,
-          );
-        }
-      }
       const result = await cancelBooking({
         bookingId: id,
         cancelledById: session.user.id,
         reason: body.reason,
+        asTraveler: isTraveler && !isOwner && !isAdmin,
       });
       if (!result.ok) return jsonError(result.error, result.status);
       const { data: updated } = await db
@@ -162,9 +150,37 @@ export async function PATCH(request: Request, { params }: Params) {
 
     if (!body.status) return jsonError("No status provided", 400);
 
+    if (body.status === "NO_SHOW") {
+      const result = await markNoShow({
+        bookingId: id,
+        actorId: session.user.id,
+        note: body.reason,
+        holdPayout: true,
+        actor: session.user,
+      });
+      if (!result.ok) return jsonError(result.error, result.status);
+      const { data: updated } = await db
+        .from("Booking")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      return jsonOk({ booking: updated });
+    }
+
+    const patch: Record<string, unknown> = {
+      status: body.status,
+      updatedAt: new Date().toISOString(),
+    };
+    if (
+      body.status === "COMPLETED" &&
+      !(booking.reviewToken as string | null)
+    ) {
+      patch.reviewToken = createId();
+    }
+
     const { data: updated, error } = await db
       .from("Booking")
-      .update({ status: body.status, updatedAt: new Date().toISOString() })
+      .update(patch)
       .eq("id", id)
       .select("*")
       .single();

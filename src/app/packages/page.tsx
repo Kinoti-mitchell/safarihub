@@ -1,9 +1,13 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase";
 import { brandFromSettings } from "@/lib/branding";
 import { formatPriceTourist } from "@/lib/currency";
+import { boolSetting, getPlatformSettings } from "@/lib/settings";
 
 export default async function PackagesPage() {
+  const settings = await getPlatformSettings();
+  if (!boolSetting(settings, "flags.packagesEnabled")) notFound();
   const brand = await brandFromSettings();
   let packages: Array<{
     id: string;

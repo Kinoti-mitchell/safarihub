@@ -30,6 +30,10 @@ import {
   type ListingKindKey,
   type OfferKind,
 } from "@/lib/amenities";
+import {
+  bulletsToTextarea,
+  isTourCategories,
+} from "@/lib/tour-listing";
 
 type Busy =
   | null
@@ -64,15 +68,15 @@ const SETUP_STEPS = [
   {
     key: "details",
     title: "Contact",
-    blurb: "Description, guest phone, payments (optional polish)",
+    blurb: "Description, tour details, guest phone, payments",
   },
-  { key: "photos", title: "Photos", blurb: "Show guests the place" },
+  { key: "photos", title: "Photos", blurb: "Show guests the experience" },
   {
     key: "offers",
     title: "Offers",
-    blurb: "Rooms, tables, passes, tickets at this place",
+    blurb: "Activities, packages, seats & departure capacity",
   },
-  { key: "location", title: "Map pin", blurb: "GPS pin for directions" },
+  { key: "location", title: "Map pin", blurb: "Meeting point / GPS" },
   { key: "submit", title: "Preview", blurb: "Check everything, then publish" },
 ] as const;
 
@@ -435,6 +439,9 @@ export default function ProviderListingDetailPage({
           dayUsePrice,
           offerKind,
           maxGuests: Number(form.get("maxGuests") || 2),
+          capacityUnit: form.get("capacityUnit")
+            ? String(form.get("capacityUnit"))
+            : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -443,7 +450,7 @@ export default function ProviderListingDetailPage({
         return;
       }
       formEl.reset();
-      flash("Offer added to this property");
+      flash("Offer added");
       await load();
     } catch {
       setError("Network error — is the server running?");
@@ -705,6 +712,15 @@ export default function ProviderListingDetailPage({
           website: String(form.get("website") || "").trim() || null,
           menuUrl: String(form.get("menuUrl") || "").trim() || null,
           openingHours: String(form.get("openingHours") || "").trim() || null,
+          durationDays: form.get("durationDays")
+            ? Math.round(Number(form.get("durationDays")))
+            : null,
+          durationHours: form.get("durationHours")
+            ? Math.round(Number(form.get("durationHours")))
+            : null,
+          meetingPoint: String(form.get("meetingPoint") || "").trim() || null,
+          inclusions: String(form.get("inclusions") || ""),
+          exclusions: String(form.get("exclusions") || ""),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -863,26 +879,27 @@ export default function ProviderListingDetailPage({
   async function setAvailability(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedRoom || selectedRoom === "all") {
-      setError("Select a specific room type before saving a capacity override");
+      setError("Select a specific offer before saving departure capacity");
       return;
     }
     const form = new FormData(e.currentTarget);
-    const from = registrationDate() || availFrom;
+    const from = filterFrom || availFrom;
     if (!from) {
-      setError("Registration date missing — reload the page");
+      setError("Pick a from date for this departure window");
       return;
     }
-    const toRaw = String(form.get("to") || availTo || "").trim();
-    const to = toRaw || undefined;
+    const to = (filterTo || from).trim() || from;
 
     const room = listing?.roomTypes?.find((r: any) => r.id === selectedRoom);
     const available = Number(form.get("available") ?? editAvailable);
     if (Number.isNaN(available) || available < 0) {
-      setError("Enter a valid rooms available number");
+      setError("Enter a valid open capacity");
       return;
     }
     if (room && available > room.quantity) {
-      setError(`Cannot exceed total rooms (${room.quantity})`);
+      setError(
+        `Cannot exceed default capacity (${room.quantity} ${room.capacityUnit || "slots"})`,
+      );
       return;
     }
 
@@ -894,7 +911,7 @@ export default function ProviderListingDetailPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           from,
-          to: to || null,
+          to,
           available,
           price: form.get("price") ? Number(form.get("price")) : null,
         }),
@@ -1182,15 +1199,76 @@ export default function ProviderListingDetailPage({
             </div>
           </details>
           <label className="block text-sm sm:col-span-2">
-            About this place
+            {isTourCategories(categories) ? "About this tour" : "About this place"}
             <textarea
               name="description"
               rows={4}
               defaultValue={listing.description || ""}
-              placeholder="Tell guests what this place is for — hotel, restaurant, pool day, cinema, venue…"
+              placeholder={
+                isTourCategories(categories)
+                  ? "What guests experience — parks, wildlife, pace, group size…"
+                  : "Tell guests what this place is for — hotel, restaurant, pool day, cinema, venue…"
+              }
               className="mt-1 w-full rounded-md border border-line px-3 py-2"
             />
           </label>
+          {isTourCategories(categories) && (
+            <>
+              <label className="block text-sm">
+                Duration (days)
+                <input
+                  name="durationDays"
+                  type="number"
+                  min={0}
+                  max={90}
+                  defaultValue={listing.durationDays ?? ""}
+                  placeholder="e.g. 1"
+                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                Duration (hours)
+                <input
+                  name="durationHours"
+                  type="number"
+                  min={0}
+                  max={72}
+                  defaultValue={listing.durationHours ?? ""}
+                  placeholder="e.g. 8 for a day trip"
+                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                Meeting point
+                <input
+                  name="meetingPoint"
+                  defaultValue={listing.meetingPoint || ""}
+                  placeholder="e.g. Hotel lobby / Wilson Airport gate 2, 06:30"
+                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                Inclusions (one per line)
+                <textarea
+                  name="inclusions"
+                  rows={3}
+                  defaultValue={bulletsToTextarea(listing.inclusions)}
+                  placeholder="Park fees&#10;Guide&#10;Bottled water"
+                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                Exclusions (one per line)
+                <textarea
+                  name="exclusions"
+                  rows={3}
+                  defaultValue={bulletsToTextarea(listing.exclusions)}
+                  placeholder="Tips&#10;Personal items"
+                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
+                />
+              </label>
+            </>
+          )}
           <label className="block text-sm">
             Phone (guests can call)
             <input
@@ -1861,6 +1939,22 @@ export default function ProviderListingDetailPage({
                 <input type="hidden" name="dayUsePrice" value="" />
               )}
 
+              {(kind === "ACTIVITY" || kind === "PACKAGE") && (
+                <label className="block text-sm">
+                  Capacity unit
+                  <select
+                    name="capacityUnit"
+                    defaultValue={kind === "PACKAGE" ? "packages" : "seats"}
+                    className="mt-1 w-full rounded-md border border-line px-3 py-2"
+                  >
+                    <option value="seats">Seats</option>
+                    <option value="vehicles">Vehicles</option>
+                    <option value="slots">Slots</option>
+                    <option value="packages">Packages</option>
+                  </select>
+                </label>
+              )}
+
               <div className="sm:col-span-2">
                 <button
                   type="submit"
@@ -1873,6 +1967,120 @@ export default function ProviderListingDetailPage({
             </form>
           );
         })()}
+
+        {listing.roomTypes?.some(
+          (r: { offerKind?: string }) =>
+            r.offerKind === "ACTIVITY" ||
+            r.offerKind === "PACKAGE" ||
+            r.offerKind === "TICKET",
+        ) && (
+          <div className="mt-8 rounded-lg border border-line bg-sand/30 p-4">
+            <h3 className="font-display text-lg font-semibold text-lake">
+              Departures &amp; capacity
+            </h3>
+            <p className="mt-1 text-sm text-ink-muted">
+              Set how many seats or vehicles are open on a date. Default capacity
+              comes from each offer&apos;s quantity; overrides apply per day.
+            </p>
+            <form
+              onSubmit={(e) => void setAvailability(e)}
+              className="mt-4 grid gap-3 sm:grid-cols-2"
+            >
+              <label className="block text-sm sm:col-span-2">
+                Offer
+                <select
+                  value={selectedRoom}
+                  onChange={(e) => setSelectedRoom(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2"
+                >
+                  <option value="all">Select an offer…</option>
+                  {(listing.roomTypes || []).map(
+                    (r: {
+                      id: string;
+                      name: string;
+                      quantity: number;
+                      capacityUnit?: string | null;
+                      offerKind?: string;
+                    }) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} (default {r.quantity}{" "}
+                        {r.capacityUnit || "slots"})
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="block text-sm">
+                From date
+                <input
+                  type="date"
+                  value={filterFrom}
+                  onChange={(e) => setFilterFrom(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                To date
+                <input
+                  type="date"
+                  value={filterTo}
+                  onChange={(e) => setFilterTo(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                Open capacity
+                <input
+                  name="available"
+                  type="number"
+                  min={0}
+                  value={editAvailable}
+                  onChange={(e) =>
+                    setEditAvailable(Math.max(0, Number(e.target.value) || 0))
+                  }
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2"
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  disabled={disabled || busy === "availability"}
+                  className="rounded-md bg-lake px-4 py-2.5 text-sm font-semibold text-sand disabled:opacity-60"
+                >
+                  {busy === "availability" ? "Saving…" : "Save capacity"}
+                </button>
+              </div>
+            </form>
+            {availSummary && (
+              <p className="mt-3 text-xs text-ink-muted">
+                Today: {availSummary.openToday} open ·{" "}
+                {availSummary.bookedToday} booked across{" "}
+                {availSummary.roomTypeCount} offer
+                {availSummary.roomTypeCount === 1 ? "" : "s"}
+              </p>
+            )}
+            {!!availByRoom.length && (
+              <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-xs text-ink-muted">
+                {availByRoom.map((block: any) => (
+                  <li key={block.room?.id || Math.random()}>
+                    <p className="font-medium text-ink">
+                      {block.room?.name || "Offer"}
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {(block.days || []).slice(0, 10).map((d: any) => (
+                        <li key={d.date}>
+                          {d.date}: {d.available} open
+                          {d.booked != null ? ` · ${d.booked} booked` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {(() => {
           const isEventOffer =
             offerKind === "TICKET" ||
@@ -1971,6 +2179,21 @@ export default function ProviderListingDetailPage({
               </p>
             ) : (
               <p className="mt-2 text-sm text-red-700">No description yet</p>
+            )}
+            {(listing.meetingPoint ||
+              listing.durationDays ||
+              listing.durationHours) && (
+              <p className="mt-2 text-sm text-ink">
+                {listing.durationDays
+                  ? `${listing.durationDays}d `
+                  : ""}
+                {listing.durationHours
+                  ? `${listing.durationHours}h `
+                  : ""}
+                {listing.meetingPoint
+                  ? `· Meet: ${listing.meetingPoint}`
+                  : ""}
+              </p>
             )}
             <dl className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
               <div>

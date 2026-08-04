@@ -1,6 +1,6 @@
 import { HomeHero, type HeroSlide } from "@/components/hero-carousel";
 import { HomeSearch } from "@/components/home-search";
-import { CATEGORIES } from "@/lib/categories";
+import { publicCategories } from "@/lib/categories";
 import {
   getFeaturedListings,
   getHeroFallbackListings,
@@ -115,7 +115,13 @@ export default async function HomePage() {
             Find a place
           </p>
           <div className="mt-3">
-            <HomeSearch marketName={brand.marketName} />
+            <HomeSearch
+              marketName={brand.marketName}
+              categories={publicCategories(settings).map((c) => ({
+                slug: c.slug,
+                label: c.label,
+              }))}
+            />
           </div>
         </div>
       </section>
@@ -126,12 +132,12 @@ export default async function HomePage() {
             One trip. Every piece.
           </h2>
           <p className="mt-2 text-ink-muted">
-            Stay, eat, move, explore and meet — the same marketplace operators
-            use to run hospitality {marketLine}.
+            Stays and tours first — the same marketplace operators use to run
+            hospitality {marketLine}.
           </p>
         </div>
         <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-line/70 bg-line/70 sm:grid-cols-2 lg:grid-cols-5">
-          {CATEGORIES.map((c) => (
+          {publicCategories(settings).map((c) => (
             <Link
               key={c.slug}
               href={`/browse?category=${c.slug}`}

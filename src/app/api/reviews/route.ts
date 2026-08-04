@@ -9,7 +9,6 @@ import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user) return jsonError("Unauthorized", 401);
     const settings = await getPlatformSettings();
     if (!boolSetting(settings, "flags.reviewsEnabled")) {
       return jsonError("Reviews are currently disabled", 400);
@@ -19,20 +18,43 @@ export async function POST(request: Request) {
         bookingId: z.string(),
         rating: z.number().int().min(1).max(5),
         comment: z.string().optional(),
+        /** Guest completed bookings: manage-link access token */
+        accessToken: z.string().optional(),
       })
       .parse(await request.json());
 
     const { data: booking } = await db
       .from("Booking")
-      .select("id, travelerId, listingId, status")
+      .select("id, travelerId, listingId, status, accessToken")
       .eq("id", body.bookingId)
       .maybeSingle();
-    if (!booking || booking.travelerId !== session.user.id) {
-      return jsonError("Forbidden", 403);
-    }
+    if (!booking) return jsonError("Booking not found", 404);
     if (booking.status !== "COMPLETED") {
       return jsonError("Complete the stay before reviewing", 400);
     }
+
+    const tokenOk =
+      Boolean(body.accessToken) &&
+      Boolean(booking.accessToken) &&
+      body.accessToken === (booking.accessToken as string);
+    const isTraveler =
+      !!session?.user && booking.travelerId === session.user.id;
+
+    if (!isTraveler && !tokenOk) {
+      if (!session?.user) return jsonError("Unauthorized", 401);
+      return jsonError("Forbidden", 403);
+    }
+
+    const { data: existing } = await db
+      .from("Review")
+      .select("id")
+      .eq("bookingId", booking.id)
+      .maybeSingle();
+    if (existing) return jsonError("You already reviewed this stay", 400);
+
+    const travelerId =
+      (booking.travelerId as string | null) ||
+      (isTraveler ? session!.user.id : null);
 
     const { data: review, error } = await db
       .from("Review")
@@ -40,13 +62,22 @@ export async function POST(request: Request) {
         id: createId(),
         listingId: booking.listingId,
         bookingId: booking.id,
-        travelerId: session.user.id,
+        travelerId,
         rating: body.rating,
         comment: body.comment ?? null,
       })
       .select("*")
       .single();
-    if (error) throw error;
+    if (error) {
+      const msg = String(error.message || "");
+      if (msg.includes("travelerId") || msg.includes("null value")) {
+        return jsonError(
+          "Guest reviews need a database update. Run db/2026-tourist-ops.sql (nullable Review.travelerId), then try again.",
+          503,
+        );
+      }
+      throw error;
+    }
     return jsonOk({ review }, 201);
   } catch (error) {
     return handleRouteError(error);

@@ -1,6 +1,11 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { createId } from "@/lib/ids";
+import {
+  getPlatformSettings,
+  boolSetting,
+  numberSetting,
+} from "@/lib/settings";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 
 const ACCOUNT_SELECT = "*, ledger:LoyaltyLedger(*)";
@@ -29,7 +34,17 @@ export async function GET() {
       if (insertError) throw insertError;
       account = await loadAccount(session.user.id);
     }
-    return jsonOk({ account });
+    const settings = await getPlatformSettings();
+    const pointValue = numberSetting(settings, "loyalty.pointValue") || 1;
+    const kesPerPoint = numberSetting(settings, "loyalty.kesPerPoint") || 100;
+    const enabled = boolSetting(settings, "flags.loyaltyEnabled");
+    return jsonOk({
+      account,
+      pointValue,
+      kesPerPoint,
+      enabled,
+      balanceKes: ((account?.points as number) || 0) * pointValue,
+    });
   } catch (error) {
     return handleRouteError(error);
   }

@@ -5,6 +5,9 @@ import { createId } from "@/lib/ids";
 import { getProviderForUser } from "@/lib/provider";
 import { getPlatformSettings, boolSetting } from "@/lib/settings";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
+import { notify } from "@/lib/notify";
+import { emailAdminRecipients } from "@/lib/admin-alerts";
+import { sendEmail } from "@/lib/email";
 
 export async function GET() {
   try {
@@ -51,7 +54,7 @@ export async function POST(request: Request) {
     const body = createSchema.parse(await request.json());
     const { data: listing } = await db
       .from("Listing")
-      .select("id, providerId, status")
+      .select("id, providerId, status, title")
       .eq("id", body.listingId)
       .maybeSingle();
     if (!listing || listing.status !== "PUBLISHED") {
@@ -73,6 +76,33 @@ export async function POST(request: Request) {
       .select("*")
       .single();
     if (error) throw error;
+
+    const { data: members } = await db
+      .from("ProviderMember")
+      .select("userId, user:User(email)")
+      .eq("providerId", listing.providerId as string);
+
+    const subject = `New inquiry · ${listing.title || "Listing"}`;
+    const text = `${body.name} wrote:\n\n${body.message}\n\nReply: ${body.email}${body.phone ? ` · ${body.phone}` : ""}`;
+
+    for (const m of members ?? []) {
+      await notify({
+        userId: m.userId as string,
+        type: "inquiry.new",
+        title: subject,
+        body: text.slice(0, 280),
+        href: "/provider/inquiries",
+      });
+      const memberEmail = (m.user as { email?: string } | null)?.email;
+      if (memberEmail && boolSetting(settings, "notifications.emailOnInquiry")) {
+        await sendEmail({ to: memberEmail, subject, text });
+      }
+    }
+
+    if (boolSetting(settings, "notifications.emailOnInquiry")) {
+      await emailAdminRecipients({ subject, text });
+    }
+
     return jsonOk({ inquiry }, 201);
   } catch (error) {
     return handleRouteError(error);

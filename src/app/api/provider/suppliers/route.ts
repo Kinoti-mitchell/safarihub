@@ -8,6 +8,15 @@ import { createId, slugify } from "@/lib/ids";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import { staffHasPermission } from "@/lib/staff-roles";
 import { validateKenyanPhone } from "@/lib/identity";
+import { boolSetting, getPlatformSettings } from "@/lib/settings";
+
+async function suppliersDisabledResponse() {
+  const settings = await getPlatformSettings();
+  if (!boolSetting(settings, "flags.suppliersEnabled")) {
+    return jsonError("Supplier marketplace is currently disabled", 403);
+  }
+  return null;
+}
 
 const CATEGORIES = [
   "FOOD",
@@ -27,6 +36,8 @@ function missingTable(err: { message?: string; code?: string } | null) {
 /** Marketplace + my suppliers + orders for the active business. */
 export async function GET() {
   try {
+    const disabled = await suppliersDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     const access = await requireProviderAccess(session.user.id);
@@ -122,6 +133,8 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
+    const disabled = await suppliersDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     const access = await requireApprovedProviderAccess(session.user.id);
@@ -146,6 +159,8 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
+    const disabled = await suppliersDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     const access = await requireApprovedProviderAccess(session.user.id);
@@ -200,6 +215,8 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const disabled = await suppliersDisabledResponse();
+    if (disabled) return disabled;
     const session = await auth();
     if (!session?.user) return jsonError("Unauthorized", 401);
     const access = await requireApprovedProviderAccess(session.user.id);

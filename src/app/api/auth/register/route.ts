@@ -23,6 +23,7 @@ import {
 } from "@/lib/provider-verification";
 import { resolveHardGateAutoApproval } from "@/lib/provider-auto-approval";
 import { logAudit } from "@/lib/audit";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 
 function normalizeTimeFromForm(raw: string): string | undefined {
   return normalizeTimeHm(raw) ?? undefined;
@@ -336,6 +337,15 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Public sign-up is currently disabled" },
         { status: 403 },
+      );
+    }
+    const captcha = await verifyRecaptcha(
+      typeof raw.recaptchaToken === "string" ? raw.recaptchaToken : null,
+    );
+    if (!captcha.ok) {
+      return NextResponse.json(
+        { error: captcha.error || "Captcha failed" },
+        { status: 400 },
       );
     }
     const minLen = numberSetting(settings, "security.minPasswordLength") || 6;

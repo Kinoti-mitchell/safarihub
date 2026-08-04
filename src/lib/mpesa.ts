@@ -386,3 +386,92 @@ export async function b2cPayment(opts: {
     return { ok: false, error: "Could not reach M-Pesa for payout" };
   }
 }
+
+export type ReversalResult =
+  | { ok: true; conversationId?: string; originatorConversationId?: string }
+  | { ok: false; error: string };
+
+/**
+ * Daraja Transaction Reversal — reverse a completed C2B/STK payment back to the customer.
+ * Requires initiator + security credential (same as B2C).
+ */
+export async function reverseMpesaTransaction(opts: {
+  transactionId: string;
+  amount: number;
+  remarks?: string;
+  occasion?: string;
+}): Promise<ReversalResult> {
+  try {
+    const s = await getPlatformSettings();
+    if (!(await isB2cConfigured())) {
+      return {
+        ok: false,
+        error:
+          "Reversal needs Daraja initiator + security credential (Settings → M-Pesa).",
+      };
+    }
+    const token = await getAccessToken(s);
+    if (!token) return { ok: false, error: "Could not authenticate with Daraja" };
+
+    const env = str(s, "daraja.environment") || "sandbox";
+    const shortcode = str(s, "daraja.shortcode");
+    const initiator = str(s, "daraja.initiatorName");
+    const securityCredential = str(s, "daraja.securityCredential");
+    const resultUrl =
+      str(s, "daraja.reversalResultUrl") ||
+      str(s, "daraja.resultUrl") ||
+      appUrl("/api/mpesa/reversal-result");
+    const timeoutUrl =
+      str(s, "daraja.reversalTimeoutUrl") ||
+      str(s, "daraja.timeoutUrl") ||
+      appUrl("/api/mpesa/reversal-timeout");
+
+    const res = await fetch(`${darajaBase(env)}/mpesa/reversal/v1/request`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        Initiator: initiator,
+        SecurityCredential: securityCredential,
+        CommandID: "TransactionReversal",
+        TransactionID: opts.transactionId,
+        Amount: Math.max(1, Math.round(opts.amount)),
+        ReceiverParty: shortcode,
+        RecieverIdentifierType: "11",
+        ResultURL: resultUrl,
+        QueueTimeOutURL: timeoutUrl,
+        Remarks: (opts.remarks || "Booking refund").slice(0, 100),
+        Occasion: (opts.occasion || "Refund").slice(0, 100),
+      }),
+    });
+
+    const data = (await res.json().catch(() => ({}))) as {
+      ConversationID?: string;
+      OriginatorConversationID?: string;
+      ResponseCode?: string;
+      ResponseDescription?: string;
+      errorMessage?: string;
+    };
+
+    if (!res.ok || (data.ResponseCode && data.ResponseCode !== "0")) {
+      return {
+        ok: false,
+        error:
+          data.errorMessage ||
+          data.ResponseDescription ||
+          "M-Pesa reversal request failed",
+      };
+    }
+
+    return {
+      ok: true,
+      conversationId: data.ConversationID,
+      originatorConversationId: data.OriginatorConversationID,
+    };
+  } catch (error) {
+    console.error("reverseMpesaTransaction failed", error);
+    return { ok: false, error: "Could not reach M-Pesa for reversal" };
+  }
+}

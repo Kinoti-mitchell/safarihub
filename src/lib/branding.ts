@@ -11,6 +11,11 @@ export type Brand = {
   supportEmail: string;
   supportPhone: string;
   currency: string;
+  accentColor: string;
+  checkInTime: string;
+  checkOutTime: string;
+  timezone: string;
+  googleMapsApiKey: string;
 };
 
 /** Resolve the current brand (logo + name) from platform settings. */
@@ -27,6 +32,7 @@ export async function brandFromSettings(): Promise<Brand> {
       .map((w) => w[0]?.toUpperCase() || "")
       .join("") ||
     "·";
+  const accent = String(s["branding.accentColor"] || "").trim() || "#d4a017";
   return {
     logoUrl: String(s["branding.logoUrl"] || ""),
     logoText: initials,
@@ -38,5 +44,10 @@ export async function brandFromSettings(): Promise<Brand> {
     supportEmail: String(s["general.supportEmail"] || "").trim(),
     supportPhone: String(s["general.supportPhone"] || "").trim(),
     currency: String(s["general.currency"] || "KES").toUpperCase(),
+    accentColor: accent,
+    checkInTime: String(s["booking.checkInTime"] || "14:00"),
+    checkOutTime: String(s["booking.checkOutTime"] || "10:00"),
+    timezone: String(s["general.timezone"] || "Africa/Nairobi"),
+    googleMapsApiKey: String(s["integrations.googleMapsApiKey"] || "").trim(),
   };
 }

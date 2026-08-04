@@ -1,8 +1,13 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase";
 import { browseHref } from "@/lib/categories";
+import { boolSetting, getPlatformSettings } from "@/lib/settings";
 
 export default async function EventsPage() {
+  const settings = await getPlatformSettings();
+  if (!boolSetting(settings, "flags.eventsEnabled")) notFound();
+
   let events: Array<{
     id: string;
     title: string;
@@ -42,9 +47,16 @@ export default async function EventsPage() {
           <ul className="divide-y divide-line/80 border-y border-line/80">
             {events.map((e) => {
               const when = new Date(e.startsAt);
+              const day = e.startsAt.slice(0, 10);
               const stayHref = browseHref({
                 category: "stays",
                 county: e.county?.slug,
+                checkIn: day,
+              });
+              const ticketHref = browseHref({
+                kind: "EVENT",
+                county: e.county?.slug,
+                checkIn: day,
               });
               return (
                 <li key={e.id} className="flex gap-5 py-6 sm:gap-8">
@@ -77,12 +89,20 @@ export default async function EventsPage() {
                         {e.description}
                       </p>
                     )}
-                    <Link
-                      href={stayHref}
-                      className="mt-4 inline-flex text-sm font-semibold text-lake-bright transition hover:text-lake"
-                    >
-                      Book a stay nearby →
-                    </Link>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link
+                        href={ticketHref}
+                        className="inline-flex text-sm font-semibold text-lake-bright transition hover:text-lake"
+                      >
+                        Tickets &amp; event listings →
+                      </Link>
+                      <Link
+                        href={stayHref}
+                        className="inline-flex text-sm font-medium text-ink-muted transition hover:text-lake"
+                      >
+                        Book a stay nearby →
+                      </Link>
+                    </div>
                   </div>
                 </li>
               );

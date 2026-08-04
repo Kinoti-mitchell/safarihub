@@ -61,6 +61,28 @@ export function googleMapsPlaceUrl(lat: number, lng: number, label?: string): st
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }
 
+/** Embeddable map URL; appends key when Admin → Integrations has one. */
+export function googleMapsEmbedUrl(opts: {
+  lat?: number | null;
+  lng?: number | null;
+  query?: string;
+  zoom?: number;
+  apiKey?: string | null;
+}): string {
+  const zoom = opts.zoom ?? 15;
+  let url: string;
+  if (opts.lat != null && opts.lng != null) {
+    url = `https://www.google.com/maps?q=${opts.lat},${opts.lng}&z=${zoom}&output=embed`;
+  } else {
+    url = `https://www.google.com/maps?q=${encodeURIComponent(opts.query || "")}&z=${zoom}&output=embed`;
+  }
+  const key = String(opts.apiKey || "").trim();
+  if (key) {
+    url += `&key=${encodeURIComponent(key)}`;
+  }
+  return url;
+}
+
 export function normalizeWebsiteUrl(raw?: string | null): string | null {
   if (!raw) return null;
   const t = raw.trim();

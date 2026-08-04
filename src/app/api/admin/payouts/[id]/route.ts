@@ -3,7 +3,7 @@ import { db } from "@/lib/supabase";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import { requireAdminPermission } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import { notify } from "@/lib/notify";
+import { notifyAndEmail } from "@/lib/notify";
 import { b2cPayment, isB2cConfigured } from "@/lib/mpesa";
 
 type Params = { params: Promise<{ id: string }> };
@@ -22,7 +22,9 @@ export async function PATCH(request: Request, { params }: Params) {
     const { data: existing, error: findErr } = await db
       .from("Payout")
       .select(
-        "id, status, amount, providerId, bookingId, provider:Provider(name, phone)",
+        `id, status, amount, providerId, bookingId, holdReason,
+         provider:Provider(name, phone, payoutPhone, kycStatus, isApproved),
+         booking:Booking(status, paymentStatus, disputeStatus)`,
       )
       .eq("id", id)
       .maybeSingle();
@@ -33,6 +35,29 @@ export async function PATCH(request: Request, { params }: Params) {
     let b2cNote: string | null = null;
 
     if (body.sendMpesa) {
+      if (existing.status === "ON_HOLD") {
+        return jsonError(
+          existing.holdReason || "Payout is on hold (dispute/no-show)",
+          400,
+        );
+      }
+      const booking = existing.booking as {
+        status?: string;
+        paymentStatus?: string;
+        disputeStatus?: string | null;
+      } | null;
+      if (
+        booking?.status === "CANCELLED" ||
+        booking?.paymentStatus === "REFUNDED"
+      ) {
+        return jsonError("Cannot pay out a cancelled/refunded booking", 400);
+      }
+      if (
+        booking?.disputeStatus &&
+        ["OPEN", "HOLDING"].includes(booking.disputeStatus)
+      ) {
+        return jsonError("Resolve the dispute before paying out", 400);
+      }
       if (!(await isB2cConfigured())) {
         return jsonError(
           "Configure Daraja B2C (initiator + security credential) in Settings → M-Pesa first",
@@ -42,11 +67,20 @@ export async function PATCH(request: Request, { params }: Params) {
       const provider = existing.provider as {
         name?: string;
         phone?: string | null;
+        payoutPhone?: string | null;
+        kycStatus?: string | null;
+        isApproved?: boolean | null;
       } | null;
-      const phone = provider?.phone;
+      if (!provider?.isApproved) {
+        return jsonError("Provider is not approved", 400);
+      }
+      if (provider.kycStatus === "REJECTED") {
+        return jsonError("Provider KYC is rejected", 400);
+      }
+      const phone = provider?.payoutPhone || provider?.phone;
       if (!phone) {
         return jsonError(
-          "Provider has no phone number on file — add it before paying via M-Pesa",
+          "Provider has no payout phone — set it on the business profile before M-Pesa B2C",
           400,
         );
       }
@@ -64,9 +98,22 @@ export async function PATCH(request: Request, { params }: Params) {
         .from("Payout")
         .update({
           status: "PROCESSING",
+          b2cConversationId: sent.conversationId ?? null,
+          b2cOriginatorConversationId:
+            sent.originatorConversationId ?? null,
           updatedAt: new Date().toISOString(),
         })
         .eq("id", id);
+      const { recordPaymentEvent } = await import("@/lib/payment-events");
+      await recordPaymentEvent({
+        kind: "B2C_SENT",
+        payoutId: id,
+        bookingId: existing.bookingId as string,
+        amount: existing.amount as number,
+        status: "PROCESSING",
+        actorId: admin.id,
+        metadata: { conversationId: sent.conversationId },
+      });
     }
 
     if (!nextStatus && !body.sendMpesa) {
@@ -98,17 +145,19 @@ export async function PATCH(request: Request, { params }: Params) {
 
     const { data: members } = await db
       .from("ProviderMember")
-      .select("userId")
+      .select("userId, user:User(email)")
       .eq("providerId", existing.providerId as string);
     for (const m of members ?? []) {
-      await notify({
+      await notifyAndEmail({
         userId: m.userId as string,
+        email: (m.user as { email?: string } | null)?.email ?? null,
         type: `payout.${String(status).toLowerCase()}`,
         title: body.sendMpesa
           ? "Payout sent via M-Pesa"
           : `Payout ${String(status).toLowerCase()}`,
         body: `KES ${(existing.amount as number).toLocaleString()} is now ${String(status).toLowerCase()}.`,
         href: "/provider/payouts",
+        emailFlag: "notifications.emailOnPayout",
       });
     }
 

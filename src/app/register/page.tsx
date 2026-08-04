@@ -27,6 +27,7 @@ import {
   type RegistrantRole,
 } from "@/lib/provider-verification";
 import { checkIdentityFields } from "@/lib/check-identity-client";
+import { createTabBind, writeTabBind } from "@/lib/tab-session";
 
 const DRAFT_KEY = "safari_hub_provider_signup_v3";
 
@@ -168,6 +169,9 @@ function RegisterForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const draftHydrated = useRef(false);
 
+  const [allowSelfSignup, setAllowSelfSignup] = useState(true);
+  const [minPasswordLength, setMinPasswordLength] = useState(6);
+  const [platformReady, setPlatformReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [checkingIdentity, setCheckingIdentity] = useState(false);
@@ -214,6 +218,30 @@ function RegisterForm() {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, message, tone }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/public/platform");
+        const data = await res.json();
+        if (cancelled) return;
+        setAllowSelfSignup(data.allowSelfSignup !== false);
+        setMinPasswordLength(
+          Number(data.minPasswordLength) > 0
+            ? Number(data.minPasswordLength)
+            : 6,
+        );
+      } catch {
+        /* keep defaults */
+      } finally {
+        if (!cancelled) setPlatformReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const maxStep = asProvider ? PROVIDER_STEPS.length - 1 : 0;
@@ -337,8 +365,8 @@ function RegisterForm() {
       if (asProvider && idNumber.length < 3) {
         fields.idNumber = "Enter your national ID number";
       }
-      if (password.length < 6) {
-        fields.password = "Password must be at least 6 characters";
+      if (password.length < minPasswordLength) {
+        fields.password = `Password must be at least ${minPasswordLength} characters`;
       }
     } else if (current === 1) {
       if (!registrantRole) {
@@ -878,11 +906,13 @@ function RegisterForm() {
       }
     }
 
+    const tabBind = createTabBind();
     await signIn("credentials", {
       email,
       password,
       redirect: false,
     });
+    writeTabBind(tabBind);
     setLoading(false);
     if (asProvider) {
       router.push("/provider");
@@ -922,6 +952,24 @@ function RegisterForm() {
 
   const reviewSummary = step === 6 ? getReviewSummary() : null;
   const amenityCategories = categoriesForBusinessType(businessType);
+
+  if (platformReady && !allowSelfSignup) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="font-display text-2xl font-semibold text-ink">
+          Sign-up is closed
+        </h1>
+        <p className="mt-3 text-sm text-ink-muted">
+          Public registration is currently disabled. If you already have an
+          account,{" "}
+          <Link href="/login" className="font-semibold underline">
+            log in
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1071,7 +1119,7 @@ function RegisterForm() {
                 name="password"
                 type="password"
                 required={!asProvider || step === 0}
-                minLength={6}
+                minLength={minPasswordLength}
                 autoComplete="new-password"
                 className={inputClass(Boolean(fieldErrors.password))}
               />

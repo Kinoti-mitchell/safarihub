@@ -4,6 +4,10 @@ import { requireProviderAccess } from "@/lib/provider";
 import { createId } from "@/lib/ids";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import { boolSetting, getPlatformSettings } from "@/lib/settings";
+import {
+  processEtimsSubmission,
+  type EtimsSubmissionRow,
+} from "@/lib/etims";
 
 export async function GET() {
   try {
@@ -124,7 +128,17 @@ export async function POST(req: Request) {
         }
         throw error;
       }
-      return jsonOk({ queued: true, submission: row });
+
+      const settings = await getPlatformSettings();
+      const processed = await processEtimsSubmission(
+        { ...row, kraRef: null } as EtimsSubmissionRow,
+        settings,
+      );
+      return jsonOk({
+        queued: true,
+        submission: processed.submission || row,
+        message: processed.message,
+      });
     }
 
     if (action === "markSubmitted") {

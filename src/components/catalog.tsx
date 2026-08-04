@@ -3,14 +3,17 @@ import { Suspense } from "react";
 import { db } from "@/lib/supabase";
 import { publicListingPath } from "@/lib/listing-paths";
 import { CatalogFilters } from "@/components/catalog-filters";
+import { CatalogBrowseView } from "@/components/catalog-browse-view";
 import {
   CATEGORIES,
   browseHref,
   categoryLabel,
+  publicCategories,
   resolveCategoryEnum,
 } from "@/lib/categories";
 import { getPlatformSettings } from "@/lib/settings";
 import { expireDueFeatures } from "@/lib/featured";
+import { checkRoomAvailability } from "@/lib/availability";
 
 export { CATEGORIES, browseHref, resolveCategoryEnum } from "@/lib/categories";
 
@@ -20,10 +23,13 @@ export type CatalogSearch = {
   minPrice?: string;
   maxPrice?: string;
   guests?: string;
+  checkIn?: string;
+  checkOut?: string;
   kind?: string;
   amenity?: string;
   /** Category slug (stays) or enum (STAY) */
   category?: string;
+  page?: string;
 };
 
 type CatalogListing = {
@@ -39,13 +45,17 @@ type CatalogListing = {
   category?: string;
   categories?: string[];
   venueTypes?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
   town: { name: string } | null;
   county: { name: string };
   provider: { name: string; logoUrl?: string | null };
   media: Array<{ url: string }>;
-  roomTypes: Array<{ basePrice: number }>;
+  roomTypes: Array<{ id?: string; basePrice: number }>;
   reviews: Array<{ rating: number }>;
 };
+
+const PAGE_SIZE = 24;
 
 export async function getLiveCounties() {
   try {
@@ -94,7 +104,7 @@ export async function getListings(
       .order("featured", { ascending: false })
       .order("isPromoted", { ascending: false })
       .order("createdAt", { ascending: false })
-      .limit(48);
+      .limit(96);
 
     if (cat) {
       query = query.or(`category.eq.${cat},categories.cs.["${cat}"]`);
@@ -131,7 +141,50 @@ export async function getListings(
 
     const { data, error } = await query;
     if (error) throw error;
-    return (data ?? []) as unknown as CatalogListing[];
+    let listings = (data ?? []) as unknown as CatalogListing[];
+
+    const checkInRaw = search.checkIn?.trim().slice(0, 10);
+    if (checkInRaw && /^\d{4}-\d{2}-\d{2}$/.test(checkInRaw)) {
+      const checkOutRaw = search.checkOut?.trim().slice(0, 10);
+      const checkInDate = new Date(`${checkInRaw}T12:00:00.000Z`);
+      let checkOutDate =
+        checkOutRaw &&
+        /^\d{4}-\d{2}-\d{2}$/.test(checkOutRaw) &&
+        checkOutRaw > checkInRaw
+          ? new Date(`${checkOutRaw}T12:00:00.000Z`)
+          : new Date(checkInDate);
+      if (!(checkOutRaw && checkOutRaw > checkInRaw)) {
+        checkOutDate.setUTCDate(checkOutDate.getUTCDate() + 1);
+      }
+
+      // Cap availability checks so browse stays responsive
+      const AVAIL_CAP = 24;
+      const toCheck = listings.slice(0, AVAIL_CAP);
+
+      const availabilityOk = await Promise.all(
+        toCheck.map(async (listing) => {
+          const rooms = Array.isArray(listing.roomTypes)
+            ? listing.roomTypes
+            : [];
+          if (rooms.length === 0) return false;
+          for (const room of rooms.slice(0, 4)) {
+            if (!room?.id) continue;
+            const avail = await checkRoomAvailability({
+              roomTypeId: room.id,
+              checkIn: checkInDate,
+              checkOut: checkOutDate,
+              roomsBooked: 1,
+            });
+            if (avail.ok) return true;
+          }
+          return false;
+        }),
+      );
+
+      listings = toCheck.filter((_, i) => availabilityOk[i]);
+    }
+
+    return listings;
   } catch {
     return [];
   }
@@ -211,7 +264,13 @@ export async function getHeroFallbackListings(
   }
 }
 
-export function ListingCard({ listing }: { listing: CatalogListing }) {
+export function ListingCard({
+  listing,
+  search,
+}: {
+  listing: CatalogListing;
+  search?: Pick<CatalogSearch, "checkIn" | "checkOut" | "guests">;
+}) {
   const fromPrice = listing.roomTypes.length
     ? Math.min(...listing.roomTypes.map((r) => r.basePrice))
     : null;
@@ -221,9 +280,17 @@ export function ListingCard({ listing }: { listing: CatalogListing }) {
       : listing.reviews.reduce((s, r) => s + r.rating, 0) /
         listing.reviews.length;
 
+  const hrefBase = publicListingPath(listing);
+  const qs = new URLSearchParams();
+  if (search?.checkIn) qs.set("checkIn", search.checkIn);
+  if (search?.checkOut) qs.set("checkOut", search.checkOut);
+  if (search?.guests) qs.set("guests", search.guests);
+  const qsStr = qs.toString();
+  const href = qsStr ? `${hrefBase}?${qsStr}` : hrefBase;
+
   return (
     <Link
-      href={publicListingPath(listing)}
+      href={href}
       className="card card-interactive group flex flex-col overflow-hidden"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-sand-deep">
@@ -330,15 +397,18 @@ export async function CatalogPage({
   search?: CatalogSearch;
 }) {
   const searchParams = search || {};
-  const activeEnum =
-    category || resolveCategoryEnum(searchParams.category) || undefined;
-  const activeMeta = CATEGORIES.find((c) => c.category === activeEnum);
-
   const [listings, counties, settings] = await Promise.all([
-    getListings(activeEnum, searchParams),
+    getListings(
+      category || resolveCategoryEnum(searchParams.category) || undefined,
+      searchParams,
+    ),
     getLiveCounties(),
     getPlatformSettings(),
   ]);
+  const visibleCategories = publicCategories(settings);
+  const activeEnum =
+    category || resolveCategoryEnum(searchParams.category) || undefined;
+  const activeMeta = visibleCategories.find((c) => c.category === activeEnum);
   const marketName = String(settings["general.marketName"] || "").trim();
   const browseLabel = marketName ? `Browse ${marketName}` : "Browse";
 
@@ -347,14 +417,54 @@ export async function CatalogPage({
     slug: "all",
     category: "STAY" as const,
     label: browseLabel,
-    eyebrow: "One marketplace",
-    blurb:
-      "Stays, dining, transfers, tours and venues — filter by what you need.",
+    eyebrow: "Stay & explore",
+    blurb: "Stays and tours first — book what you need for the trip.",
     image: "/hero/elephants-savanna.jpg",
+    launchCore: true as const,
   };
 
   const filterBase = { ...searchParams };
   delete filterBase.category;
+  delete filterBase.page;
+
+  const page = Math.max(1, Number(searchParams.page) || 1);
+  const total = listings.length;
+  const pageSlice = listings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const dateSearch = {
+    checkIn: searchParams.checkIn,
+    checkOut: searchParams.checkOut,
+    guests: searchParams.guests,
+  };
+
+  const pins = pageSlice
+    .filter(
+      (l) =>
+        l.latitude != null &&
+        l.longitude != null &&
+        !Number.isNaN(Number(l.latitude)) &&
+        !Number.isNaN(Number(l.longitude)),
+    )
+    .map((l) => {
+      const fromPrice = l.roomTypes.length
+        ? Math.min(...l.roomTypes.map((r) => r.basePrice))
+        : null;
+      const qs = new URLSearchParams();
+      if (dateSearch.checkIn) qs.set("checkIn", dateSearch.checkIn);
+      if (dateSearch.checkOut) qs.set("checkOut", dateSearch.checkOut);
+      if (dateSearch.guests) qs.set("guests", dateSearch.guests);
+      const qsStr = qs.toString();
+      const hrefBase = publicListingPath(l);
+      return {
+        id: l.id,
+        title: l.title,
+        href: qsStr ? `${hrefBase}?${qsStr}` : hrefBase,
+        latitude: Number(l.latitude),
+        longitude: Number(l.longitude),
+        priceLabel:
+          fromPrice != null ? `From KES ${fromPrice.toLocaleString()}` : null,
+      };
+    });
 
   return (
     <div>
@@ -367,9 +477,12 @@ export async function CatalogPage({
             {meta.blurb}
           </p>
           <p className="mt-3 text-sm font-medium text-ink">
-            {listings.length > 0
-              ? `${listings.length} listing${listings.length === 1 ? "" : "s"} ready to book`
+            {total > 0
+              ? `${total} listing${total === 1 ? "" : "s"} ready to book`
               : "Try another category or clear filters"}
+            {searchParams.checkIn
+              ? ` · available from ${searchParams.checkIn}`
+              : ""}
           </p>
         </div>
       </div>
@@ -391,7 +504,7 @@ export async function CatalogPage({
           >
             All
           </Link>
-          {CATEGORIES.map((c) => {
+          {visibleCategories.map((c) => {
             const active = c.category === activeEnum;
             return (
               <Link
@@ -420,41 +533,58 @@ export async function CatalogPage({
             categorySlug={activeMeta?.slug}
           />
         </Suspense>
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {listings.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
-          ))}
-        </div>
-        {listings.length === 0 && (
-          <div className="mt-10 border border-line/80 bg-white/60 px-6 py-10 text-center sm:px-10">
-            <p className="font-display text-lg font-semibold text-ink">
-              Nothing matches yet
-            </p>
-            <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">
-              Clear filters, try another county, or switch category — Stay, Eat,
-              Move, Explore and Meet share one marketplace.
-            </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
-              <Link
-                href="/browse"
-                className="rounded-lg bg-lake px-4 py-2 text-sm font-semibold text-sand"
-              >
-                Show all
-              </Link>
-              {CATEGORIES.filter((c) => c.category !== activeEnum)
-                .slice(0, 3)
-                .map((c) => (
-                  <Link
-                    key={c.slug}
-                    href={browseHref({ category: c.slug })}
-                    className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink-muted hover:border-lake-bright hover:text-ink"
-                  >
-                    Try {c.label}
-                  </Link>
-                ))}
-            </div>
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <CatalogBrowseView
+            pins={pins}
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            grid={
+              <>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {pageSlice.map((listing) => (
+                    <ListingCard
+                      key={listing.id}
+                      listing={listing}
+                      search={dateSearch}
+                    />
+                  ))}
+                </div>
+                {total === 0 && (
+                  <div className="mt-10 border border-line/80 bg-white/60 px-6 py-10 text-center sm:px-10">
+                    <p className="font-display text-lg font-semibold text-ink">
+                      Nothing matches yet
+                    </p>
+                    <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">
+                      Clear filters, try another county or date, or switch
+                      category — stays and tours are the launch focus.
+                    </p>
+                    <div className="mt-5 flex flex-wrap justify-center gap-2">
+                      <Link
+                        href="/browse"
+                        className="rounded-lg bg-lake px-4 py-2 text-sm font-semibold text-sand"
+                      >
+                        Show all
+                      </Link>
+                      {visibleCategories
+                        .filter((c) => c.category !== activeEnum)
+                        .slice(0, 3)
+                        .map((c) => (
+                          <Link
+                            key={c.slug}
+                            href={browseHref({ category: c.slug })}
+                            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink-muted hover:border-lake-bright hover:text-ink"
+                          >
+                            Try {c.label}
+                          </Link>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            }
+          />
+        </Suspense>
       </div>
     </div>
   );

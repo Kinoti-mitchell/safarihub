@@ -31,7 +31,9 @@ export default async function PackageBookingPage({
 
   const { data: booking } = await db
     .from("PackageBooking")
-    .select("*, package:TravelPackage(title, days, price)")
+    .select(
+      "*, package:TravelPackage(title, days, price), traveler:User(name, email, phone)",
+    )
     .eq("id", id)
     .maybeSingle();
   if (!booking) notFound();
@@ -105,8 +107,23 @@ export default async function PackageBookingPage({
         <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-ink-muted">Guest</dt>
-            <dd className="mt-0.5 font-medium">{booking.guestName as string}</dd>
-            <dd className="text-ink-muted">{booking.guestEmail as string}</dd>
+            <dd className="mt-0.5 font-medium">
+              {(booking.guestName as string | null) ||
+                (booking.traveler as { name?: string | null } | null)?.name ||
+                "Guest"}
+            </dd>
+            <dd className="text-ink-muted">
+              {(booking.guestEmail as string | null) ||
+                (booking.traveler as { email?: string | null } | null)?.email ||
+                null}
+            </dd>
+            {((booking.guestPhone as string | null) ||
+              (booking.traveler as { phone?: string | null } | null)?.phone) && (
+              <dd className="text-ink-muted">
+                {(booking.guestPhone as string | null) ||
+                  (booking.traveler as { phone?: string | null } | null)?.phone}
+              </dd>
+            )}
           </div>
           <div>
             <dt className="text-ink-muted">Starts</dt>

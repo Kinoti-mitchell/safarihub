@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AdminProviderSubmission } from "@/components/admin-provider-submission";
+import { KYC_REJECT_CODES } from "@/lib/kyc-reject-codes";
 
 type Toast = { id: number; message: string; tone: "success" | "error" };
 
@@ -209,12 +210,25 @@ export default function AdminApprovalsPage() {
     }
   }
 
+  const [rejectTarget, setRejectTarget] = useState<PendingBusiness | null>(
+    null,
+  );
+  const [rejectCodes, setRejectCodes] = useState<string[]>([]);
+  const [rejectNote, setRejectNote] = useState("");
+
   async function rejectBusiness(b: PendingBusiness) {
-    const reason = window.prompt(
-      "Decline reason (shown to the provider):",
-      "Documents incomplete or unclear — please resubmit",
-    );
-    if (reason == null) return;
+    setRejectTarget(b);
+    setRejectCodes([]);
+    setRejectNote("");
+  }
+
+  async function confirmReject() {
+    const b = rejectTarget;
+    if (!b) return;
+    if (!rejectCodes.length && !rejectNote.trim()) {
+      pushToast("Pick at least one checklist item or add a note", "error");
+      return;
+    }
     const key = `provider:${b.id}`;
     setActionBusy(key, true);
     try {
@@ -224,7 +238,8 @@ export default function AdminApprovalsPage() {
         body: JSON.stringify({
           isApproved: false,
           kycStatus: "REJECTED",
-          rejectionReason: reason.trim() || "Documents incomplete",
+          rejectionCodes: rejectCodes,
+          rejectionReason: rejectNote.trim() || null,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -233,6 +248,7 @@ export default function AdminApprovalsPage() {
         return;
       }
       pushToast(`${b.name} declined`, "success");
+      setRejectTarget(null);
       setOpenBusinessId(null);
       await load();
     } catch {
@@ -246,6 +262,67 @@ export default function AdminApprovalsPage() {
 
   return (
     <div className="px-4 py-10 sm:px-8">
+      {rejectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-white p-5 shadow-xl">
+            <h2 className="font-display text-xl font-semibold text-ink">
+              Decline {rejectTarget.name}
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              Select checklist items shown to the provider on Compliance.
+            </p>
+            <ul className="mt-4 space-y-2">
+              {KYC_REJECT_CODES.map((c) => {
+                const on = rejectCodes.includes(c.code);
+                return (
+                  <li key={c.code}>
+                    <label className="flex cursor-pointer gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          setRejectCodes((prev) =>
+                            on
+                              ? prev.filter((x) => x !== c.code)
+                              : [...prev, c.code],
+                          )
+                        }
+                      />
+                      <span>{c.label}</span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+            <label className="mt-4 block text-xs text-ink-muted">
+              Extra note (optional)
+              <textarea
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                rows={3}
+                className="mt-1 w-full rounded-md border border-line px-3 py-2 text-sm"
+                placeholder="Anything else the provider should fix…"
+              />
+            </label>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRejectTarget(null)}
+                className="rounded-md border border-line px-3 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmReject()}
+                className="rounded-md bg-red-700 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Decline & notify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="pointer-events-none fixed right-4 top-4 z-50 flex flex-col gap-2">
         {toasts.map((t) => (
           <div

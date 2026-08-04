@@ -1,12 +1,14 @@
 import {
   confirmBookingPaid,
+  confirmPackageBookingPaid,
   failMpesaBooking,
+  failMpesaPackageBooking,
   findBookingByCheckoutId,
 } from "@/lib/payments";
 
 /**
  * Safaricom Daraja STK Push result callback.
- * Success → confirm booking. Failure → cancel booking and store why.
+ * Success → confirm listing or package booking. Failure → cancel and store why.
  * Always responds 200 with the acknowledgement shape Daraja expects.
  */
 export async function POST(request: Request) {
@@ -40,13 +42,31 @@ export async function POST(request: Request) {
       const amountItem = cb.CallbackMetadata?.Item?.find(
         (i) => i.Name === "Amount",
       )?.Value;
-      await confirmBookingPaid(match.bookingId, {
-        method: "MPESA",
-        providerRef: receipt ? String(receipt) : checkoutId,
-        amount: amountItem != null ? Number(amountItem) : match.amount,
-        amountReceived:
-          amountItem != null ? Number(amountItem) : match.amount,
-      });
+      const providerRef = receipt ? String(receipt) : checkoutId;
+      const amount =
+        amountItem != null ? Number(amountItem) : match.amount;
+
+      if (match.kind === "package") {
+        await confirmPackageBookingPaid(match.packageBookingId, {
+          method: "MPESA",
+          providerRef,
+          amount,
+          amountReceived: amount,
+        });
+      } else {
+        await confirmBookingPaid(match.bookingId, {
+          method: "MPESA",
+          providerRef,
+          amount,
+          amountReceived: amount,
+        });
+      }
+    } else if (match.kind === "package") {
+      await failMpesaPackageBooking(
+        match.packageBookingId,
+        cb?.ResultDesc || "Payment declined",
+        { resultCode: cb?.ResultCode },
+      );
     } else {
       await failMpesaBooking(
         match.bookingId,

@@ -13,7 +13,7 @@ import {
 } from "@/lib/mpesa";
 import { notify, notifyAndEmail } from "@/lib/notify";
 import { chargeCardSandbox, type CardInput } from "@/lib/card";
-import { ensureReceiptNumber } from "@/lib/receipt";
+import { ensureReceiptNumber, makeReceiptNumber } from "@/lib/receipt";
 import { normalizePhone } from "@/lib/sms";
 
 export type PaymentMethod = "MPESA" | "CARD" | "CASH_ON_ARRIVAL";
@@ -152,9 +152,13 @@ export async function confirmBookingPaid(
       .eq("id", existingPayment.id as string);
   }
 
+  const autoConfirm = boolSetting(
+    await getPlatformSettings(),
+    "booking.autoConfirm",
+  );
   await updateBooking(bookingId, {
     paymentStatus: "PAID",
-    status: "CONFIRMED",
+    status: autoConfirm ? "CONFIRMED" : "PENDING",
     receiptNumber,
     amountPaid: amountReceived,
     paidAt,
@@ -217,10 +221,15 @@ export async function confirmBookingPaid(
     await notifyAndEmail({
       userId: (booking.travelerId as string | null) ?? null,
       email: guestEmail,
-      type: "booking.confirmed",
-      title: `Booking confirmed · ${listing.title}`,
-      body: `Your booking ${booking.reference} is confirmed. Total: KES ${(booking.totalAmount as number).toLocaleString()} (incl. VAT). Receipt ${receiptNumber}. Manage or cancel: ${manageHref}`,
+      type: autoConfirm ? "booking.confirmed" : "booking.paid",
+      title: autoConfirm
+        ? `Booking confirmed · ${listing.title}`
+        : `Payment received · ${listing.title}`,
+      body: autoConfirm
+        ? `Your booking ${booking.reference} is confirmed. Total: KES ${(booking.totalAmount as number).toLocaleString()} (incl. VAT). Receipt ${receiptNumber}. Manage or cancel: ${manageHref}`
+        : `Payment received for ${booking.reference}. The host will confirm shortly. Total: KES ${(booking.totalAmount as number).toLocaleString()}. Receipt ${receiptNumber}.`,
       href: manageHref,
+      emailFlag: "notifications.emailOnBooking",
     });
     await notifyProviderOwners(listing.providerId, {
       type: "booking.new",
@@ -228,6 +237,42 @@ export async function confirmBookingPaid(
       body: `${guestName} booked ${booking.reference} (KES ${(booking.totalAmount as number).toLocaleString()}).`,
       href: "/provider/bookings",
     });
+
+    try {
+      const { queueEtimsForPaidBooking } = await import("@/lib/etims");
+      await queueEtimsForPaidBooking({
+        bookingId,
+        providerId: listing.providerId,
+        receiptNumber,
+        amount: booking.totalAmount as number,
+      });
+    } catch (e) {
+      console.error("eTIMS auto-queue failed", e);
+    }
+
+    try {
+      const { recordPaymentEvent } = await import("@/lib/payment-events");
+      const kind =
+        opts.method === "MPESA"
+          ? "STK_CALLBACK"
+          : opts.method === "CARD"
+            ? "CARD_CONFIRMED"
+            : opts.method === "CASH_ON_ARRIVAL"
+              ? "CASH_RECORDED"
+              : "CONFIRM_MANUAL";
+      await recordPaymentEvent({
+        kind,
+        bookingId,
+        amount: amountReceived,
+        status: "PAID",
+        providerRef: opts.providerRef,
+        actorId: opts.confirmedById ?? null,
+        note: opts.note,
+        metadata: { method: opts.method },
+      });
+    } catch {
+      /* non-fatal */
+    }
   }
 
   return booking;
@@ -547,16 +592,386 @@ export async function processPayment(opts: {
   };
 }
 
+export type CheckoutMatch =
+  | { kind: "listing"; bookingId: string; amount: number }
+  | { kind: "package"; packageBookingId: string; amount: number };
+
 export async function findBookingByCheckoutId(
   checkoutRequestId: string,
-): Promise<{ bookingId: string; amount: number } | null> {
+): Promise<CheckoutMatch | null> {
   const { data } = await db
     .from("Payment")
-    .select("bookingId, amount")
+    .select("bookingId, packageBookingId, amount")
     .eq("providerRef", checkoutRequestId)
     .maybeSingle();
-  if (!data) return null;
-  return { bookingId: data.bookingId as string, amount: data.amount as number };
+  if (data?.packageBookingId) {
+    return {
+      kind: "package",
+      packageBookingId: data.packageBookingId as string,
+      amount: data.amount as number,
+    };
+  }
+  if (data?.bookingId) {
+    return {
+      kind: "listing",
+      bookingId: data.bookingId as string,
+      amount: data.amount as number,
+    };
+  }
+
+  // Fallback: PackageBooking.mpesaCheckoutId (migration may add the column)
+  try {
+    const { data: pkg } = await db
+      .from("PackageBooking")
+      .select("id, totalAmount")
+      .eq("mpesaCheckoutId", checkoutRequestId)
+      .maybeSingle();
+    if (pkg?.id) {
+      return {
+        kind: "package",
+        packageBookingId: pkg.id as string,
+        amount: (pkg.totalAmount as number) || 0,
+      };
+    }
+  } catch {
+    // column may not exist yet
+  }
+
+  return null;
+}
+
+async function updatePackageBooking(
+  packageBookingId: string,
+  patch: Record<string, unknown>,
+) {
+  const { data, error } = await db
+    .from("PackageBooking")
+    .update({ ...patch, updatedAt: new Date().toISOString() })
+    .eq("id", packageBookingId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Confirm a package booking paid after successful M-Pesa (or card) settlement.
+ */
+export async function confirmPackageBookingPaid(
+  packageBookingId: string,
+  opts: {
+    method: PaymentMethod;
+    providerRef: string;
+    amount?: number;
+    amountReceived?: number;
+    note?: string;
+  },
+) {
+  const { data: state } = await db
+    .from("PackageBooking")
+    .select("paymentStatus, status")
+    .eq("id", packageBookingId)
+    .maybeSingle();
+  if (state?.paymentStatus === "PAID" && state?.status === "CONFIRMED") {
+    return null;
+  }
+
+  const paidAt = new Date().toISOString();
+  const amountReceived = opts.amountReceived ?? opts.amount ?? 0;
+  const receiptNumber = makeReceiptNumber();
+
+  const { data: existingPayment } = await db
+    .from("Payment")
+    .select("id")
+    .eq("packageBookingId", packageBookingId)
+    .eq("status", "PAID")
+    .maybeSingle();
+
+  if (!existingPayment) {
+    const { data: pending } = await db
+      .from("Payment")
+      .select("id")
+      .eq("packageBookingId", packageBookingId)
+      .maybeSingle();
+    if (pending) {
+      await db
+        .from("Payment")
+        .update({
+          status: "PAID",
+          providerRef: opts.providerRef,
+          receiptNumber,
+          amountReceived,
+          note: opts.note ?? null,
+          amount: opts.amount ?? amountReceived,
+          updatedAt: paidAt,
+        })
+        .eq("id", pending.id as string);
+    } else {
+      await db.from("Payment").insert({
+        id: createId(),
+        bookingId: null,
+        packageBookingId,
+        method: opts.method,
+        status: "PAID",
+        amount: opts.amount ?? amountReceived,
+        amountReceived,
+        providerRef: opts.providerRef,
+        receiptNumber,
+        note: opts.note ?? null,
+      });
+    }
+  }
+
+  const autoConfirmPkg = boolSetting(
+    await getPlatformSettings(),
+    "booking.autoConfirm",
+  );
+  await updatePackageBooking(packageBookingId, {
+    paymentStatus: "PAID",
+    status: autoConfirmPkg ? "CONFIRMED" : "PENDING",
+    receiptNumber,
+    amountPaid: amountReceived,
+    paidAt,
+  });
+
+  const { data: booking, error } = await db
+    .from("PackageBooking")
+    .select(
+      "*, package:TravelPackage(title), traveler:User(name, email)",
+    )
+    .eq("id", packageBookingId)
+    .single();
+  if (error) throw error;
+
+  const pkg = booking.package as { title?: string } | null;
+  const guestEmail =
+    (booking.guestEmail as string | null) ||
+    (booking.traveler as { email?: string } | null)?.email ||
+    null;
+  const token = booking.accessToken as string | null;
+  const manageHref = token
+    ? `/packages/bookings/${packageBookingId}?t=${token}&confirmed=1`
+    : `/packages/bookings/${packageBookingId}?confirmed=1`;
+
+  await notifyAndEmail({
+    userId: (booking.travelerId as string | null) ?? null,
+    email: guestEmail,
+    type: autoConfirmPkg ? "package.confirmed" : "package.paid",
+    title: autoConfirmPkg
+      ? `Package confirmed · ${pkg?.title || "Package"}`
+      : `Payment received · ${pkg?.title || "Package"}`,
+    body: autoConfirmPkg
+      ? `Your booking ${booking.reference} is confirmed. Total: KES ${(booking.totalAmount as number).toLocaleString()}. Receipt ${receiptNumber}.`
+      : `Payment received for ${booking.reference}. The operator will confirm shortly. Total: KES ${(booking.totalAmount as number).toLocaleString()}. Receipt ${receiptNumber}.`,
+    href: manageHref,
+    emailFlag: "notifications.emailOnBooking",
+  });
+
+  return booking;
+}
+
+/**
+ * Mark M-Pesa package payment failed and cancel the package booking.
+ */
+export async function failMpesaPackageBooking(
+  packageBookingId: string,
+  reason: string,
+  opts?: { resultCode?: number | string | null },
+) {
+  const message = explainStkFailure(opts?.resultCode ?? null, reason);
+  const now = new Date().toISOString();
+
+  const { data: payment } = await db
+    .from("Payment")
+    .select("id, status")
+    .eq("packageBookingId", packageBookingId)
+    .maybeSingle();
+
+  if (payment?.status === "PAID") {
+    return { paymentStatus: "PAID", status: "CONFIRMED", message: null };
+  }
+
+  if (payment) {
+    await db
+      .from("Payment")
+      .update({
+        status: "FAILED",
+        note: message,
+        updatedAt: now,
+      })
+      .eq("id", payment.id as string);
+  }
+
+  await updatePackageBooking(packageBookingId, {
+    paymentStatus: "FAILED",
+    status: "CANCELLED",
+    cancellationReason: message,
+  });
+
+  try {
+    const { data: b } = await db
+      .from("PackageBooking")
+      .select(
+        "travelerId, reference, guestEmail, traveler:User(email), package:TravelPackage(title)",
+      )
+      .eq("id", packageBookingId)
+      .maybeSingle();
+    if (b) {
+      const pkg = b.package as { title?: string } | null;
+      await notifyAndEmail({
+        userId: (b.travelerId as string | null) ?? null,
+        email:
+          (b.guestEmail as string | null) ||
+          (b.traveler as { email?: string } | null)?.email ||
+          null,
+        type: "booking.payment_failed",
+        title: `M-Pesa payment failed · ${pkg?.title || "Package"}`,
+        body: `${message} Reference ${b.reference}.`,
+        href: "/account",
+      });
+    }
+  } catch (error) {
+    console.error("failMpesaPackageBooking notify failed", error);
+  }
+
+  return { paymentStatus: "FAILED", status: "CANCELLED", message };
+}
+
+/**
+ * Poll package M-Pesa payment status; query Daraja if still PENDING.
+ */
+export async function refreshMpesaPackagePaymentStatus(
+  packageBookingId: string,
+): Promise<{
+  paymentStatus: string;
+  status: string;
+  message: string | null;
+  reference?: string;
+  receiptNumber?: string | null;
+}> {
+  type PackageRow = {
+    id: string;
+    reference: string;
+    status: string;
+    paymentStatus: string;
+    receiptNumber: string | null;
+    mpesaCheckoutId?: string | null;
+  };
+
+  let row: PackageRow | null = null;
+
+  {
+    const withCheckout = await db
+      .from("PackageBooking")
+      .select(
+        "id, reference, status, paymentStatus, receiptNumber, mpesaCheckoutId",
+      )
+      .eq("id", packageBookingId)
+      .maybeSingle();
+    if (!withCheckout.error && withCheckout.data) {
+      row = withCheckout.data as PackageRow;
+    } else {
+      const plain = await db
+        .from("PackageBooking")
+        .select("id, reference, status, paymentStatus, receiptNumber")
+        .eq("id", packageBookingId)
+        .maybeSingle();
+      if (plain.error) throw plain.error;
+      row = (plain.data as PackageRow | null) ?? null;
+    }
+  }
+
+  if (!row) {
+    return {
+      paymentStatus: "FAILED",
+      status: "CANCELLED",
+      message: "Booking not found",
+    };
+  }
+
+  const booking = row;
+
+  const { data: payment } = await db
+    .from("Payment")
+    .select("id, status, providerRef, note, method, amount")
+    .eq("packageBookingId", packageBookingId)
+    .maybeSingle();
+
+  if (booking.paymentStatus === "PAID") {
+    return {
+      paymentStatus: "PAID",
+      status: booking.status,
+      message: "Payment received. Package confirmed.",
+      reference: booking.reference,
+      receiptNumber: booking.receiptNumber ?? null,
+    };
+  }
+
+  if (booking.paymentStatus === "FAILED") {
+    return {
+      paymentStatus: "FAILED",
+      status: booking.status,
+      message:
+        (payment as { note?: string } | null)?.note ||
+        "M-Pesa payment failed. Package was not confirmed.",
+      reference: booking.reference,
+    };
+  }
+
+  const checkoutId =
+    (payment as { providerRef?: string } | null)?.providerRef ||
+    booking.mpesaCheckoutId ||
+    null;
+
+  if (
+    booking.paymentStatus === "PENDING" &&
+    payment &&
+    (payment as { method?: string }).method === "MPESA" &&
+    checkoutId
+  ) {
+    const q = await queryStkStatus(checkoutId);
+    if (!("error" in q) && q.done) {
+      if (q.success) {
+        await confirmPackageBookingPaid(packageBookingId, {
+          method: "MPESA",
+          providerRef: checkoutId,
+          amount: (payment as { amount?: number }).amount,
+        });
+        const { data: updated } = await db
+          .from("PackageBooking")
+          .select("status, paymentStatus, receiptNumber, reference")
+          .eq("id", packageBookingId)
+          .single();
+        return {
+          paymentStatus: "PAID",
+          status: (updated?.status as string) || "CONFIRMED",
+          message: "Payment received. Package confirmed.",
+          reference:
+            (updated?.reference as string) || booking.reference,
+          receiptNumber: (updated?.receiptNumber as string) || null,
+        };
+      }
+      const failed = await failMpesaPackageBooking(
+        packageBookingId,
+        q.resultDesc,
+        { resultCode: q.resultCode },
+      );
+      return {
+        paymentStatus: "FAILED",
+        status: "CANCELLED",
+        message: failed.message,
+        reference: booking.reference,
+      };
+    }
+  }
+
+  return {
+    paymentStatus: "PENDING",
+    status: "PENDING",
+    message:
+      "Waiting for M-Pesa… Enter your PIN on the phone prompt. Package confirms only after payment succeeds.",
+    reference: booking.reference,
+  };
 }
 
 /**

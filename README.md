@@ -5,7 +5,8 @@ Stack: **Next.js (PWA) + Supabase PostgreSQL** (SQL schema — not Prisma migrat
 
 **Live app (Vercel):** https://safari-hub-beta.vercel.app/  
 **GitHub Pages:** https://kinoti-mitchell.github.io/safarihub/ (redirects to Vercel)  
-**User manual:** [USER_MANUAL.md](./USER_MANUAL.md) — travellers, operators, and admins.
+**User manual:** [USER_MANUAL.md](./USER_MANUAL.md) — travellers, operators, and admins.  
+**System docs:** [SYSTEM.md](./SYSTEM.md) — product overview, roles, flows, architecture.
 
 ## What it does
 
@@ -15,8 +16,8 @@ Stack: **Next.js (PWA) + Supabase PostgreSQL** (SQL schema — not Prisma migrat
 | **Roles** | Admin · Tourist · Provider (+ staffing invites) |
 | **Listings** | Places, tours/experiences, events, and travel packages (multi-category) |
 | **Browse** | Stay / Eat / Move / Explore / Meet + filters (type, amenity, price, county) |
-| **Bookings** | M-Pesa STK (Daraja), Card (sandbox/manual), Cash on arrival, VAT receipts |
-| **Provider OS** | Listings, inbox, bookings, staffing, supplier marketplace, eTIMS queue, payouts, insights |
+| **Bookings** | M-Pesa STK (Daraja), Card (sandbox or manual confirm), Cash on arrival, VAT receipts |
+| **Provider OS** | Listings, inbox, bookings, staffing, supplier marketplace, eTIMS (manual/sandbox/live), payouts, insights |
 | **Admin** | Approvals, KYC, payouts (M-Pesa B2C), suppliers, markets, insights, settings |
 
 ## Setup
@@ -30,6 +31,7 @@ Stack: **Next.js (PWA) + Supabase PostgreSQL** (SQL schema — not Prisma migrat
    - Category amenities: `db/2026-category-labels.sql` (Hotel under Stay, Wi‑Fi under All, …)
    - Unique identity: `db/2026-unique-identity.sql` (unique phone + company registration)
    - Optional demos: `db/seed-demo-listings.sql` (tour, event, package samples)
+   - Ops hardening (refunds, disputes, trips, eTIMS retries): `db/2026-ops-hardening.sql`
 3. Install and run:
 
 ```bash
@@ -53,8 +55,10 @@ Open http://localhost:3000
    B2C payouts: initiator name + security credential; result/timeout URLs default to `/api/mpesa/b2c-result` and `/api/mpesa/b2c-timeout`.
 3. **Email** (Settings → Email): Resend or SendGrid API key + from address (password reset, booking mail).
 4. **App URLs**: `NEXT_PUBLIC_APP_URL` and `AUTH_URL` = live HTTPS URL.
-5. **Card**: sandbox test cards by default; set Card processing to *manual* if you confirm cards offline. Wire Stripe Elements / Pesapal for real PCI card capture later.
-6. **Providers**: ensure payout phone is set on the provider profile before **Pay M-Pesa**.
+5. **Card**: sandbox test cards confirm instantly; *manual* mode waits for provider/admin **Confirm card paid**.
+6. **Cron**: set `CRON_SECRET` on Vercel so `/api/cron/complete-bookings` and `/api/cron/etims-submit` authorize.
+7. **eTIMS**: Admin → Settings → Compliance — *manual*, *sandbox* (auto KRA ref), or *live* (API URL + key).
+8. **Providers**: ensure payout phone is set on the provider profile before **Pay M-Pesa**.
 
 ## Scripts
 
@@ -100,3 +104,12 @@ Public pages (editable in Admin → Settings → Legal):
 - [/legal/cancellation](/legal/cancellation)
 
 Tourists can cancel before check-in / event start; paid bookings are marked refunded in-app (processor refund follows M-Pesa/card rules).
+
+## Scheduled jobs
+
+Configured in `vercel.json` (requires `CRON_SECRET` in production):
+
+| Path | Schedule | Purpose |
+|------|----------|---------|
+| `/api/cron/complete-bookings` | Hourly | Past stays → `COMPLETED` + review token |
+| `/api/cron/etims-submit` | Every 6h | Drain eTIMS queue (sandbox/live modes) |

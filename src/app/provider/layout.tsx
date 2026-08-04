@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { ProviderSidebar } from "@/components/provider-sidebar";
+import { ProviderShellHeader } from "@/components/provider-shell-header";
 import { AnnouncementBanner } from "@/components/announcement-banner";
 import { ProviderApprovalGate } from "@/components/provider-approval-gate";
 import { ProviderRoleGate } from "@/components/provider-role-gate";
+import { TabSessionGate } from "@/components/tab-session-gate";
 import { getProviderForUser } from "@/lib/provider";
+import { boolSetting, getPlatformSettings } from "@/lib/settings";
 import { db } from "@/lib/supabase";
 
 function brandInitials(name: string): string {
@@ -77,37 +80,50 @@ export default async function ProviderLayout({
     ? await loadNavBadges(access.provider.id)
     : undefined;
 
+  const settings = await getPlatformSettings();
+  const bindTab = boolSetting(settings, "security.bindSessionToTab");
+  const suppliersEnabled = boolSetting(settings, "flags.suppliersEnabled");
+  const staffingEnabled = boolSetting(settings, "flags.staffingEnabled");
+
   return (
     <div
       data-role="provider"
       className="flex min-h-dvh w-full flex-col md:h-dvh md:flex-row md:overflow-hidden"
     >
-      <ProviderSidebar
-        user={{ name: session.user.name, email: session.user.email }}
-        brand={{
-          name: businessName,
-          logoUrl: businessLogo,
-          logoText: brandInitials(businessName),
-        }}
-        badges={badges}
-        membershipRole={membershipRole}
-      />
-      <div className="dash-shell min-w-0 flex-1 md:overflow-y-auto">
-        <div
-          aria-hidden
-          className="h-1 w-full bg-gradient-to-r from-[#062824] via-[#178076] to-[#e0a41a]"
+      <TabSessionGate enabled={bindTab}>
+        <ProviderSidebar
+          user={{ name: session.user.name, email: session.user.email }}
+          brand={{
+            name: businessName,
+            logoUrl: businessLogo,
+            logoText: brandInitials(businessName),
+          }}
+          badges={badges}
+          membershipRole={membershipRole}
+          businessType={
+            (access?.provider.businessType as string | null | undefined) || null
+          }
+          suppliersEnabled={suppliersEnabled}
+          staffingEnabled={staffingEnabled}
         />
-        <AnnouncementBanner />
-        <ProviderApprovalGate
-          approved={approved}
-          businessName={access?.provider.name as string | undefined}
-        >
-          <ProviderRoleGate role={membershipRole}>{children}</ProviderRoleGate>
-        </ProviderApprovalGate>
-        <p className="px-4 py-3 text-center text-[0.7rem] text-ink-muted md:px-6">
-          Powered by Safari Hub
-        </p>
-      </div>
+        <div className="dash-shell min-w-0 flex-1 md:overflow-y-auto">
+          <div
+            aria-hidden
+            className="h-1 w-full bg-gradient-to-r from-[#062824] via-[#178076] to-[#e0a41a]"
+          />
+          <ProviderShellHeader businessName={businessName} />
+          <AnnouncementBanner />
+          <ProviderApprovalGate
+            approved={approved}
+            businessName={access?.provider.name as string | undefined}
+          >
+            <ProviderRoleGate role={membershipRole}>{children}</ProviderRoleGate>
+          </ProviderApprovalGate>
+          <p className="px-4 py-3 text-center text-[0.7rem] text-ink-muted md:px-6">
+            Powered by Safari Hub
+          </p>
+        </div>
+      </TabSessionGate>
     </div>
   );
 }

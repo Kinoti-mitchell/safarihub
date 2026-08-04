@@ -36,6 +36,8 @@ export default function AdminBookingsPage() {
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +67,30 @@ export default function AdminBookingsPage() {
     return () => clearTimeout(t);
   }, [load]);
 
+  async function confirmCard(b: AdminBooking) {
+    setBusyId(b.id);
+    setError(null);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/bookings/${b.id}/card`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error || "Could not confirm card payment");
+        return;
+      }
+      setMsg(`Card confirmed for ${b.reference}`);
+      void load();
+    } catch {
+      setError("Network error — could not confirm card");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="px-4 py-10 sm:px-8">
       <h1 className="font-display text-3xl font-semibold text-lake">Bookings</h1>
@@ -72,6 +98,7 @@ export default function AdminBookingsPage() {
         {total} booking{total === 1 ? "" : "s"} · KES{" "}
         {revenue.toLocaleString()} collected
       </p>
+      {msg && <p className="mt-3 text-sm text-lake-bright">{msg}</p>}
 
       <div className="mt-6 flex flex-wrap gap-2">
         <button
@@ -131,10 +158,16 @@ export default function AdminBookingsPage() {
                 <th className="px-4 py-3 font-medium">Amount</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {bookings.map((b) => (
+              {bookings.map((b) => {
+                const needsCard =
+                  b.paymentMethod === "CARD" &&
+                  b.paymentStatus === "PENDING" &&
+                  !["CANCELLED", "NO_SHOW"].includes(b.status);
+                return (
                 <tr key={b.id} className="border-b border-line/60 last:border-0">
                   <td className="px-4 py-3 font-mono text-xs">{b.reference}</td>
                   <td className="px-4 py-3">
@@ -169,8 +202,23 @@ export default function AdminBookingsPage() {
                       {b.status.toLowerCase()}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    {needsCard ? (
+                      <button
+                        type="button"
+                        disabled={busyId === b.id}
+                        onClick={() => void confirmCard(b)}
+                        className="rounded-md bg-lake px-2.5 py-1 text-xs font-semibold text-sand disabled:opacity-50"
+                      >
+                        {busyId === b.id ? "…" : "Confirm card"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink-muted">—</span>
+                    )}
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

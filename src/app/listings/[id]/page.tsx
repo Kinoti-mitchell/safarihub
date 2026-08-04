@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { findListingByIdOrSlug, publicListingPath } from "@/lib/listing";
 import { brandFromSettings } from "@/lib/branding";
 import { getPlatformSettings, numberSetting } from "@/lib/settings";
@@ -45,17 +46,27 @@ export default async function ListingDetailPage({ params }: Props) {
     getPlatformSettings(),
   ]);
   return (
-    <ListingDetailClient
-      params={params}
-      trust={{
-        supportEmail: brand.supportEmail,
-        supportPhone: brand.supportPhone || undefined,
-        cancellationHours: numberSetting(
-          settings,
-          "booking.cancellationWindowHours",
-        ),
-        displayCurrency: brand.currency,
-      }}
-    />
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-6xl px-4 py-16 text-sm text-ink-muted">
+          Loading listing…
+        </div>
+      }
+    >
+      <ListingDetailClient
+        params={params}
+        trust={{
+          supportEmail: brand.supportEmail,
+          supportPhone: brand.supportPhone || undefined,
+          cancellationHours: numberSetting(
+            settings,
+            "booking.cancellationWindowHours",
+          ),
+          displayCurrency: brand.currency,
+          checkInTime: brand.checkInTime,
+          checkOutTime: brand.checkOutTime,
+        }}
+      />
+    </Suspense>
   );
 }

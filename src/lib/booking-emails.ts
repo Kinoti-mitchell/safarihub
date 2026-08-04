@@ -1,5 +1,7 @@
 import { sendEmail, appUrl } from "@/lib/email";
 import { notify } from "@/lib/notify";
+import { boolSetting, getPlatformSettings } from "@/lib/settings";
+import { getPlatformTimezone } from "@/lib/datetime";
 
 export type BookingEmailPayload = {
   id: string;
@@ -26,7 +28,7 @@ export type BookingEmailPayload = {
   travelerName?: string | null;
 };
 
-function formatStayDay(value: string): string {
+function formatStayDay(value: string, timeZone: string): string {
   const day = value.slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     const [y, m, d] = day.split("-").map(Number);
@@ -38,7 +40,7 @@ function formatStayDay(value: string): string {
     });
   }
   return new Date(value).toLocaleDateString("en-KE", {
-    timeZone: "Africa/Nairobi",
+    timeZone,
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -96,15 +98,30 @@ export async function emailTouristBookingConfirmed(
     return false;
   }
 
+  const settings = await getPlatformSettings();
+  if (!boolSetting(settings, "notifications.emailOnBooking")) {
+    if (booking.travelerId) {
+      await notify({
+        userId: booking.travelerId,
+        type: "booking.confirmed",
+        title: `Booking confirmed · ${booking.listingTitle || "your stay"}`,
+        body: `Your booking ${booking.reference} is confirmed.`,
+        href: manageHref(booking),
+      });
+    }
+    return false;
+  }
+
+  const timeZone = await getPlatformTimezone();
   const listing = booking.listingTitle || "your stay";
   const isDayUse = booking.stayType === "DAYUSE";
   const stayLine = isDayUse
-    ? `${formatStayDay(booking.checkIn)}${
+    ? `${formatStayDay(booking.checkIn, timeZone)}${
         booking.dayStartTime
           ? ` · ${booking.dayStartTime}–${booking.dayEndTime || ""}`
           : ""
       }`
-    : `${formatStayDay(booking.checkIn)} → ${formatStayDay(booking.checkOut)}`;
+    : `${formatStayDay(booking.checkIn, timeZone)} → ${formatStayDay(booking.checkOut, timeZone)}`;
   const rooms = booking.roomsBooked ?? 1;
   const guests = booking.guests ?? 1;
   const total =

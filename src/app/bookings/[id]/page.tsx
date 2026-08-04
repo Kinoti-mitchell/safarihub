@@ -7,7 +7,10 @@ import { brandFromSettings } from "@/lib/branding";
 import { formatKes } from "@/lib/vat";
 import { formatPriceTourist } from "@/lib/currency";
 import { ManageBookingActions } from "@/components/manage-booking-actions";
+import { GuestBookingReview } from "@/components/guest-booking-review";
 import { PrintVoucherButton } from "@/components/print-voucher-button";
+import { BookingShareActions } from "@/components/booking-share-actions";
+import { BookingSupportButton } from "@/components/booking-support-button";
 import { getPlatformSettings, numberSetting } from "@/lib/settings";
 
 type Params = {
@@ -44,7 +47,7 @@ export default async function ManageBookingPage({
   const { data: booking } = await db
     .from("Booking")
     .select(
-      "*, listing:Listing(id, title, address, slug, phone, latitude, longitude, provider:Provider(name, email, phone)), roomType:RoomType(name), traveler:User(name, email, phone)",
+      "*, listing:Listing(id, title, address, slug, phone, latitude, longitude, provider:Provider(name, email, phone)), roomType:RoomType(name), traveler:User(name, email, phone), review:Review(id)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -293,8 +296,19 @@ export default async function ManageBookingPage({
         >
           VAT receipt
         </Link>
+        <BookingSupportButton
+          bookingId={booking.id as string}
+          accessToken={(booking.accessToken as string | null) ?? token}
+        />
         <PrintVoucherButton />
       </div>
+      <BookingShareActions
+        reference={booking.reference as string}
+        title={listing?.title || "Safari Hub booking"}
+        whenLabel={`${formatStayDay(checkIn)} → ${formatStayDay(booking.checkOut as string)}`}
+        pageUrl={`${process.env.NEXT_PUBLIC_APP_URL || "https://safarihub.ke"}/bookings/${id}${token ? `?t=${token}` : booking.accessToken ? `?t=${booking.accessToken}` : ""}`}
+        guestPhone={guestPhone}
+      />
 
       <section className="mt-10 print:hidden">
         <h2 className="font-display text-lg font-semibold text-ink">
@@ -324,6 +338,23 @@ export default async function ManageBookingPage({
           </p>
         )}
       </section>
+
+      {status === "COMPLETED" &&
+        !(Array.isArray(booking.review)
+          ? booking.review.length
+          : booking.review) && (
+          <section className="mt-10 border-t border-line pt-8 print:hidden">
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Leave a review
+            </h2>
+            <div className="mt-4">
+              <GuestBookingReview
+                bookingId={id}
+                accessToken={token || (booking.accessToken as string | null)}
+              />
+            </div>
+          </section>
+        )}
     </div>
   );
 }

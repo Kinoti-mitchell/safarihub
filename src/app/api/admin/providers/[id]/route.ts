@@ -265,8 +265,11 @@ export async function PATCH(request: Request, { params }: Params) {
         commissionRate: z.number().int().min(0).max(50).optional(),
         kycStatus: z.enum(["PENDING", "VERIFIED", "REJECTED"]).optional(),
         rejectionReason: z.string().max(2000).optional().nullable(),
+        rejectionCodes: z.array(z.string().max(40)).max(20).optional().nullable(),
       })
       .parse(await request.json());
+
+    const { formatRejectionSummary } = await import("@/lib/kyc-reject-codes");
 
     const patch: Record<string, unknown> = {
       updatedAt: new Date().toISOString(),
@@ -278,16 +281,24 @@ export async function PATCH(request: Request, { params }: Params) {
       if (body.isApproved && body.kycStatus !== "REJECTED") {
         patch.kycStatus = body.kycStatus ?? "VERIFIED";
         patch.rejectionReason = null;
+        patch.rejectionCodes = null;
         patch.rejectedAt = null;
       }
     }
     if (
       body.kycStatus === "REJECTED" ||
-      (body.isApproved === false && body.rejectionReason)
+      (body.isApproved === false &&
+        (body.rejectionReason || (body.rejectionCodes && body.rejectionCodes.length)))
     ) {
       patch.kycStatus = "REJECTED";
       patch.isApproved = false;
-      patch.rejectionReason = body.rejectionReason?.trim() || "Documents or details incomplete";
+      patch.rejectionCodes = body.rejectionCodes?.length
+        ? body.rejectionCodes
+        : null;
+      patch.rejectionReason = formatRejectionSummary(
+        body.rejectionCodes,
+        body.rejectionReason,
+      );
       patch.rejectedAt = new Date().toISOString();
     }
 

@@ -1,14 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
+import { safeReturnUrl } from "@/lib/safe-return-url";
+import { createTabBind, writeTabBind } from "@/lib/tab-session";
 
 type Mode = "password" | "phone-otp";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = safeReturnUrl(
+    searchParams.get("callbackUrl") || searchParams.get("next"),
+    "",
+  );
   const [mode, setMode] = useState<Mode>("password");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,9 +28,15 @@ export default function LoginPage() {
   async function routeAfterLogin() {
     const me = await fetch("/api/auth/session").then((r) => r.json());
     const role = me?.user?.role as string | undefined;
-    if (role === "ADMIN") router.push("/admin");
-    else if (role === "PROVIDER") router.push("/provider");
-    else router.push("/account");
+    if (role === "ADMIN") {
+      router.push(returnTo.startsWith("/admin") ? returnTo : "/admin");
+    } else if (role === "PROVIDER") {
+      router.push(returnTo.startsWith("/provider") ? returnTo : "/provider");
+    } else if (returnTo && !returnTo.startsWith("/admin") && !returnTo.startsWith("/provider")) {
+      router.push(returnTo);
+    } else {
+      router.push("/account");
+    }
     router.refresh();
   }
 
@@ -61,6 +74,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     const form = new FormData(e.currentTarget);
+    const tabBind = createTabBind();
     const result = await signIn("credentials", {
       loginMethod: "password",
       email: String(form.get("email")),
@@ -72,6 +86,7 @@ export default function LoginPage() {
       setError("Invalid email or password");
       return;
     }
+    writeTabBind(tabBind);
     await routeAfterLogin();
   }
 
@@ -84,6 +99,7 @@ export default function LoginPage() {
       setError("Send a login code to your phone first");
       return;
     }
+    const tabBind = createTabBind();
     const result = await signIn("credentials", {
       loginMethod: "phone-otp",
       phone: phone.trim(),
@@ -96,6 +112,7 @@ export default function LoginPage() {
       setError("Invalid code or phone number");
       return;
     }
+    writeTabBind(tabBind);
     await routeAfterLogin();
   }
 
@@ -267,7 +284,11 @@ export default function LoginPage() {
         <p className="mt-6 text-sm text-ink-muted">
           New here?{" "}
           <Link
-            href="/register"
+            href={
+              returnTo
+                ? `/register?callbackUrl=${encodeURIComponent(returnTo)}`
+                : "/register"
+            }
             className="font-medium text-lake-bright underline underline-offset-2 hover:text-lake"
           >
             Create an account
@@ -275,5 +296,19 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-md px-4 py-16 text-sm text-ink-muted">
+          Loading…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

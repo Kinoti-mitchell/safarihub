@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type LedgerEntry = {
@@ -16,6 +17,8 @@ type LoyaltyAccount = {
 
 export default function AccountLoyaltyPage() {
   const [account, setAccount] = useState<LoyaltyAccount | null>(null);
+  const [pointValue, setPointValue] = useState(1);
+  const [kesPerPoint, setKesPerPoint] = useState(100);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,6 +31,12 @@ export default function AccountLoyaltyPage() {
         else {
           setError(null);
           setAccount(body.account);
+          if (Number.isFinite(Number(body.pointValue))) {
+            setPointValue(Number(body.pointValue) || 1);
+          }
+          if (Number.isFinite(Number(body.kesPerPoint))) {
+            setKesPerPoint(Number(body.kesPerPoint) || 100);
+          }
         }
       } catch {
         setError("Network error — could not load loyalty");
@@ -37,11 +46,18 @@ export default function AccountLoyaltyPage() {
     })();
   }, []);
 
+  const balanceKes = account
+    ? (account.points || 0) * pointValue
+    : 0;
+
   return (
     <div className="px-4 py-10 sm:px-8">
       <h1 className="font-display text-3xl font-semibold text-lake">Loyalty</h1>
       <p className="mt-1 text-sm text-ink-muted">
-        Earn points on every completed trip and redeem them on future bookings.
+        Earn 1 point per KES {kesPerPoint.toLocaleString()} paid on completed
+        trips. Each point is worth KES {pointValue.toLocaleString()} — tick
+        “Use loyalty points” when booking a stay to redeem (discount capped at
+        the booking total).
       </p>
 
       {error && (
@@ -54,7 +70,7 @@ export default function AccountLoyaltyPage() {
         <p className="mt-6 text-sm text-ink-muted">Loading loyalty…</p>
       ) : account ? (
         <>
-          <div className="mt-6 flex items-center gap-4 rounded-xl border border-line bg-lake p-6 text-sand">
+          <div className="mt-6 flex flex-wrap items-end gap-6 rounded-xl border border-line bg-lake p-6 text-sand">
             <div>
               <p className="text-xs uppercase tracking-wider text-sand/70">
                 Points balance
@@ -63,7 +79,26 @@ export default function AccountLoyaltyPage() {
                 {account.points.toLocaleString()}
               </p>
             </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-sand/70">
+                Redeemable value
+              </p>
+              <p className="mt-1 font-display text-2xl font-semibold">
+                KES {balanceKes.toLocaleString()}
+              </p>
+              <p className="mt-0.5 text-xs text-sand/70">
+                {pointValue} KES per point
+              </p>
+            </div>
           </div>
+
+          <p className="mt-4 text-sm text-ink-muted">
+            Redeem at checkout on any{" "}
+            <Link href="/browse" className="text-lake-bright underline">
+              published listing
+            </Link>
+            . Points are deducted when you confirm the booking.
+          </p>
 
           <h2 className="mt-8 font-display text-lg font-semibold text-ink">
             History
@@ -83,6 +118,9 @@ export default function AccountLoyaltyPage() {
                     <p className="font-medium">{l.reason}</p>
                     <p className="text-xs text-ink-muted">
                       {new Date(l.createdAt).toLocaleDateString()}
+                      {l.points < 0
+                        ? ` · −KES ${Math.abs(l.points * pointValue).toLocaleString()}`
+                        : ""}
                     </p>
                   </div>
                   <span

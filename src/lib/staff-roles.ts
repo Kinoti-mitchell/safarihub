@@ -111,6 +111,7 @@ const PATH_PERMISSION: Array<{ prefix: string; permission: StaffPermission }> =
     { prefix: "/provider/inquiries", permission: "inbox" },
     { prefix: "/provider/reviews", permission: "reviews" },
     { prefix: "/provider/listings", permission: "listings" },
+    { prefix: "/provider/packages", permission: "listings" },
     { prefix: "/provider/staff", permission: "staff" },
     { prefix: "/provider/suppliers", permission: "suppliers" },
     { prefix: "/provider/inventory", permission: "inventory" },

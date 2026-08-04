@@ -1,15 +1,21 @@
 import { db } from "@/lib/supabase";
 import { restockRooms } from "@/lib/bookings";
 import { notify, notifyAndEmail } from "@/lib/notify";
+import { getPlatformSettings, numberSetting } from "@/lib/settings";
+import { requestBookingRefund } from "@/lib/refunds";
 
 /**
- * Cancel a booking: mark CANCELLED, restock rooms, refund PAID payments,
- * cancel pending payouts, and notify both sides.
+ * Cancel a booking: mark CANCELLED, restock rooms, refund PAID payments
+ * (M-Pesa reversal when possible), cancel pending payouts, and notify both sides.
  */
 export async function cancelBooking(opts: {
   bookingId: string;
   cancelledById: string | null;
   reason?: string;
+  /** When true, enforce free-cancellation window from settings. */
+  asTraveler?: boolean;
+  /** Prefer ledger-only refund (default false = attempt M-Pesa reversal). */
+  ledgerRefundOnly?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const { data: booking } = await db
     .from("Booking")
@@ -28,12 +34,36 @@ export async function cancelBooking(opts: {
     };
   }
 
-  const now = new Date().toISOString();
   const checkIn = new Date(booking.checkIn as string);
-  // Free cancellation until check-in day (start of day). After that, only
-  // provider/admin should cancel — callers enforce role; we still allow with reason.
   const hoursUntil =
     (checkIn.getTime() - Date.now()) / (1000 * 60 * 60);
+
+  // Past check-in: never cancel via this path (use NO_SHOW / COMPLETED instead).
+  if (hoursUntil < 0) {
+    return {
+      ok: false,
+      error: "Too late to cancel — check-in has already passed",
+      status: 400,
+    };
+  }
+
+  // Tourists must cancel outside the free-cancellation window; hosts/admins may.
+  if (opts.asTraveler) {
+    const settings = await getPlatformSettings();
+    const windowHours = numberSetting(
+      settings,
+      "booking.cancellationWindowHours",
+    );
+    if (windowHours > 0 && hoursUntil < windowHours) {
+      return {
+        ok: false,
+        error: `Free cancellation closes ${windowHours} hours before check-in. Contact the host or support for help.`,
+        status: 400,
+      };
+    }
+  }
+
+  const now = new Date().toISOString();
 
   const { error } = await db
     .from("Booking")
@@ -54,25 +84,37 @@ export async function cancelBooking(opts: {
     roomsBooked: (booking.roomsBooked as number) || 1,
   });
 
-  // Refund paid payments (sandbox / ledger).
+  // Refund paid payments — M-Pesa reversal when possible, else ledger + manual ops.
   if (booking.paymentStatus === "PAID") {
+    const method =
+      !opts.ledgerRefundOnly && booking.paymentMethod === "MPESA"
+        ? "MPESA_REVERSAL"
+        : "MANUAL";
+    const refund = await requestBookingRefund({
+      bookingId: opts.bookingId,
+      actorId: opts.cancelledById,
+      method,
+      markCompleted: method === "MANUAL",
+      note: opts.reason || "Booking cancelled",
+    });
+    // Cancellation still succeeds even if Daraja reversal fails — ops can retry.
+    if (!refund.ok && method === "MPESA_REVERSAL") {
+      await requestBookingRefund({
+        bookingId: opts.bookingId,
+        actorId: opts.cancelledById,
+        method: "MANUAL",
+        markCompleted: true,
+        note: `${opts.reason || "Booking cancelled"} (M-Pesa reversal failed: ${refund.error})`,
+      });
+    }
+  } else {
+    // Cancel any pending/processing payout for unpaid cancellations.
     await db
-      .from("Payment")
-      .update({ status: "REFUNDED", updatedAt: now })
+      .from("Payout")
+      .update({ status: "FAILED", updatedAt: now, holdReason: "Booking cancelled" })
       .eq("bookingId", opts.bookingId)
-      .eq("status", "PAID");
-    await db
-      .from("Booking")
-      .update({ paymentStatus: "REFUNDED", updatedAt: now })
-      .eq("id", opts.bookingId);
+      .in("status", ["PENDING", "PROCESSING", "ON_HOLD"]);
   }
-
-  // Cancel any pending/processing payout for this booking.
-  await db
-    .from("Payout")
-    .update({ status: "FAILED", updatedAt: now })
-    .eq("bookingId", opts.bookingId)
-    .in("status", ["PENDING", "PROCESSING"]);
 
   const listing = booking.listing as {
     title: string;

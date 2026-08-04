@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState, use } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { publicProviderPath } from "@/lib/listing-paths";
+import {
+  publicListingPath,
+  publicProviderPath,
+} from "@/lib/listing-paths";
 import {
   CardPaymentForm,
   type CardFormValues,
@@ -18,6 +22,11 @@ import {
 } from "@/lib/geo";
 import { BookingTrustStrip } from "@/components/booking-trust-strip";
 import { formatPriceTourist } from "@/lib/currency";
+import {
+  formatTourDuration,
+  parseBulletList,
+} from "@/lib/tour-listing";
+import { AddToTripButton } from "@/components/add-to-trip-button";
 
 function listingTypeLine(listing: {
   category?: string;
@@ -61,17 +70,31 @@ export function ListingDetailClient({
     supportPhone?: string;
     cancellationHours?: number;
     displayCurrency?: string;
+    checkInTime?: string;
+    checkOutTime?: string;
   };
 }) {
   const { id } = use(params);
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [listing, setListing] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [askMsg, setAskMsg] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
+  const [askBusy, setAskBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [useLoyalty, setUseLoyalty] = useState(false);
+  const [loyaltyPointValue, setLoyaltyPointValue] = useState(1);
+  const [payFlags, setPayFlags] = useState<{
+    mpesaEnabled: boolean;
+    cardEnabled: boolean;
+    cardMode: "sandbox" | "manual";
+    cashEnabled: boolean;
+  } | null>(null);
 
   function todayISO() {
     const d = new Date();
@@ -92,9 +115,21 @@ export function ListingDetailClient({
   }
 
   const minCheckIn = todayISO();
-  const [checkIn, setCheckIn] = useState(minCheckIn);
-  const [checkOut, setCheckOut] = useState(() => addDaysISO(minCheckIn, 1));
+  const urlCheckIn = searchParams.get("checkIn") || "";
+  const urlCheckOut = searchParams.get("checkOut") || "";
+  const urlGuests = searchParams.get("guests") || "";
+  const initialCheckIn =
+    urlCheckIn && urlCheckIn >= minCheckIn ? urlCheckIn : minCheckIn;
+  const [checkIn, setCheckIn] = useState(initialCheckIn);
+  const [checkOut, setCheckOut] = useState(() => {
+    if (urlCheckOut && urlCheckOut > initialCheckIn) return urlCheckOut;
+    return addDaysISO(initialCheckIn, 1);
+  });
   const minCheckOut = addDaysISO(checkIn, 1);
+  const [guestsDefault] = useState(() => {
+    const n = Number(urlGuests);
+    return Number.isFinite(n) && n >= 1 ? String(Math.floor(n)) : "1";
+  });
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [stayType, setStayType] = useState<"OVERNIGHT" | "DAYUSE">("OVERNIGHT");
   const [dayStartTime, setDayStartTime] = useState("10:00");
@@ -103,7 +138,7 @@ export function ListingDetailClient({
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [confirmationUrl, setConfirmationUrl] = useState<string | null>(null);
   const [guestHint, setGuestHint] = useState(false);
-  const [guestCheckout, setGuestCheckout] = useState(false);
+  const [guestCheckout, setGuestCheckout] = useState(true);
   const [mpesaWait, setMpesaWait] = useState<{
     bookingId: string;
     reference: string;
@@ -118,6 +153,22 @@ export function ListingDetailClient({
     cvc: "",
   });
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
+
+  useEffect(() => {
+    void fetch("/api/public/payments")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && typeof d.cardEnabled === "boolean") {
+          setPayFlags({
+            mpesaEnabled: Boolean(d.mpesaEnabled),
+            cardEnabled: Boolean(d.cardEnabled),
+            cardMode: d.cardMode === "manual" ? "manual" : "sandbox",
+            cashEnabled: d.cashEnabled !== false,
+          });
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void fetch(`/api/listings/${id}`)
@@ -140,6 +191,22 @@ export function ListingDetailClient({
   }, [id]);
 
   useEffect(() => {
+    if (!payFlags || !listing || !paymentMethod) return;
+    const cardOk = listing.acceptCard && payFlags.cardEnabled;
+    const mpesaOk = listing.acceptMpesa && payFlags.mpesaEnabled;
+    const cashOk = listing.acceptCashOnArrival && payFlags.cashEnabled;
+    if (paymentMethod === "CARD" && !cardOk) {
+      setPaymentMethod(
+        mpesaOk ? "MPESA" : cashOk ? "CASH_ON_ARRIVAL" : "",
+      );
+    } else if (paymentMethod === "MPESA" && !mpesaOk) {
+      setPaymentMethod(cardOk ? "CARD" : cashOk ? "CASH_ON_ARRIVAL" : "");
+    } else if (paymentMethod === "CASH_ON_ARRIVAL" && !cashOk) {
+      setPaymentMethod(mpesaOk ? "MPESA" : cardOk ? "CARD" : "");
+    }
+  }, [payFlags, listing, paymentMethod]);
+
+  useEffect(() => {
     if (!session?.user) return;
     void fetch("/api/favorites")
       .then((r) => r.json())
@@ -151,6 +218,22 @@ export function ListingDetailClient({
       })
       .catch(() => undefined);
   }, [session?.user, id]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      setLoyaltyPoints(0);
+      setUseLoyalty(false);
+      return;
+    }
+    void fetch("/api/loyalty")
+      .then((r) => r.json())
+      .then((d) => {
+        setLoyaltyPoints(Number(d.account?.points) || 0);
+        const v = Number(d.pointValue);
+        if (Number.isFinite(v) && v > 0) setLoyaltyPointValue(v);
+      })
+      .catch(() => undefined);
+  }, [session?.user]);
 
   useEffect(() => {
     if (!mpesaWait) return;
@@ -286,15 +369,13 @@ export function ListingDetailClient({
     const guestName = String(form.get("guestName") || "").trim();
     const guestEmail = String(form.get("guestEmail") || "").trim();
     const guestPhone = String(form.get("guestPhone") || "").trim();
-    if (!session?.user) {
-      if (!guestCheckout) {
-        setError("Choose Join as a member, or Continue without joining");
-        return;
-      }
-      if (!guestName || !guestEmail) {
-        setError("Enter your name and email so we can send your receipt");
-        return;
-      }
+    if (!session?.user && !guestCheckout) {
+      setError("Choose Join as a member, or Continue without joining");
+      return;
+    }
+    if (!guestName || !guestEmail) {
+      setError("Enter your name and email so we can send your receipt");
+      return;
     }
 
     setPaying(true);
@@ -316,9 +397,13 @@ export function ListingDetailClient({
           paymentMethod: method,
           phone: form.get("phone") || guestPhone || undefined,
           card: method === "CARD" ? card : undefined,
-          guestName: session?.user ? undefined : guestName,
-          guestEmail: session?.user ? undefined : guestEmail,
-          guestPhone: session?.user ? undefined : guestPhone || undefined,
+          guestName,
+          guestEmail,
+          guestPhone: guestPhone || undefined,
+          loyaltyPoints:
+            session?.user && useLoyalty && loyaltyPoints > 0
+              ? loyaltyPoints
+              : undefined,
         }),
       });
       const data = await res.json();
@@ -376,27 +461,52 @@ export function ListingDetailClient({
   async function askProvider(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAskMsg(null);
-    if (!session?.user) {
-      window.location.href = `/login?callbackUrl=/listings/${id}`;
-      return;
-    }
+    setAskError(null);
+    setAskBusy(true);
     const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/conversations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        listingId: listing.id,
-        message: form.get("message"),
-        subject: listing.title,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setAskMsg(data.error || "Could not send message");
-      return;
+    try {
+      if (!session?.user) {
+        const res = await fetch("/api/inquiries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            listingId: listing.id,
+            name: String(form.get("name") || "").trim(),
+            email: String(form.get("email") || "").trim(),
+            phone: String(form.get("phone") || "").trim() || undefined,
+            message: String(form.get("message") || "").trim(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setAskError(data.error || "Could not send question");
+          return;
+        }
+        setAskMsg(
+          "Question sent — the host will follow up by email. No account needed.",
+        );
+        e.currentTarget.reset();
+        return;
+      }
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: listing.id,
+          message: form.get("message"),
+          subject: listing.title,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAskError(data.error || "Could not send message");
+        return;
+      }
+      setAskMsg("Message sent — reply in Messages.");
+      e.currentTarget.reset();
+    } finally {
+      setAskBusy(false);
     }
-    setAskMsg("Message sent — reply in Messages.");
-    e.currentTarget.reset();
   }
 
   if (!listing && !error) {
@@ -514,6 +624,30 @@ export function ListingDetailClient({
           >
             {saved ? "♥ Saved" : "♡ Save"}
           </button>
+          <AddToTripButton
+            listingId={id}
+            title={listing.title}
+            href={`${publicListingPath(listing)}${
+              checkIn
+                ? `?checkIn=${encodeURIComponent(checkIn)}${
+                    checkOut
+                      ? `&checkOut=${encodeURIComponent(checkOut)}`
+                      : ""
+                  }${
+                    guestsDefault
+                      ? `&guests=${encodeURIComponent(guestsDefault)}`
+                      : ""
+                  }`
+                : ""
+            }`}
+            kind={
+              Array.isArray(listing.listingKinds)
+                ? String(listing.listingKinds[0] || "")
+                : undefined
+            }
+            checkIn={checkIn || undefined}
+            checkOut={checkOut || undefined}
+          />
         </div>
       </div>
 
@@ -635,6 +769,53 @@ export function ListingDetailClient({
               <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">
                 {listing.description}
               </p>
+            </section>
+          )}
+
+          {(listing.meetingPoint ||
+            formatTourDuration(listing) ||
+            parseBulletList(listing.inclusions).length > 0 ||
+            parseBulletList(listing.exclusions).length > 0) && (
+            <section className="mt-8">
+              <h2 className="font-display text-xl">Tour details</h2>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                {formatTourDuration(listing) && (
+                  <div>
+                    <dt className="text-ink-muted">Duration</dt>
+                    <dd className="font-medium text-ink">
+                      {formatTourDuration(listing)}
+                    </dd>
+                  </div>
+                )}
+                {listing.meetingPoint && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-ink-muted">Meeting point</dt>
+                    <dd className="font-medium text-ink">
+                      {listing.meetingPoint}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              {parseBulletList(listing.inclusions).length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-ink">Included</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">
+                    {parseBulletList(listing.inclusions).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {parseBulletList(listing.exclusions).length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-ink">Not included</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">
+                    {parseBulletList(listing.exclusions).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </section>
           )}
 
@@ -809,9 +990,12 @@ export function ListingDetailClient({
             )}
             <p className="mt-2 text-xs text-ink-muted">
               {[
-                listing.acceptMpesa && "M-Pesa",
-                listing.acceptCard && "Card",
-                listing.acceptCashOnArrival && "Cash on arrival",
+                listing.acceptMpesa &&
+                  (payFlags?.mpesaEnabled !== false ? "M-Pesa" : null),
+                listing.acceptCard &&
+                  (payFlags?.cardEnabled !== false ? "Card" : null),
+                listing.acceptCashOnArrival &&
+                  (payFlags?.cashEnabled !== false ? "Cash on arrival" : null),
               ]
                 .filter(Boolean)
                 .join(" · ") || "Ask the host about payment"}
@@ -819,39 +1003,21 @@ export function ListingDetailClient({
             {!session?.user ? (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-ink-muted">
-                  Members can cancel and rebook from My trips. Optional — you
-                  can also book once as a guest.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
+                  Guest checkout is ready below. Optional — join as a member to
+                  manage trips in one place.{" "}
                   <Link
-                    href={`/register?callbackUrl=${encodeURIComponent(`/listings/${id}#book`)}`}
-                    className="inline-flex items-center justify-center rounded-md bg-lake px-3 py-2.5 text-center text-sm font-semibold text-sand transition hover:bg-lake-bright"
+                    href={`/login?callbackUrl=/listings/${id}#book`}
+                    className="text-lake-bright underline"
                   >
-                    Join as a member
+                    Log in
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => setGuestCheckout(true)}
-                    className={`rounded-md border px-3 py-2.5 text-sm font-medium transition ${
-                      guestCheckout
-                        ? "border-lake bg-lake/10 text-lake"
-                        : "border-line text-ink hover:border-lake-bright"
-                    }`}
-                  >
-                    Continue without joining
-                  </button>
-                </div>
-                {!guestCheckout && (
-                  <p className="text-center text-xs text-ink-muted">
-                    Already have an account?{" "}
-                    <Link
-                      href={`/login?callbackUrl=/listings/${id}#book`}
-                      className="text-lake-bright underline"
-                    >
-                      Log in
-                    </Link>
-                  </p>
-                )}
+                </p>
+                <Link
+                  href={`/register?callbackUrl=${encodeURIComponent(`/listings/${id}#book`)}`}
+                  className="inline-flex w-full items-center justify-center rounded-md border border-line px-3 py-2.5 text-center text-sm font-medium text-ink transition hover:border-lake-bright sm:w-auto"
+                >
+                  Join as a member
+                </Link>
               </div>
             ) : (
               <p className="mt-3 text-xs text-ink-muted">
@@ -866,54 +1032,49 @@ export function ListingDetailClient({
 
           {(session?.user || guestCheckout) && (
             <>
-          {!session?.user && (
-            <div className="space-y-3 rounded-md border border-line/80 bg-sand/20 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  Guest details
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setGuestCheckout(false)}
-                  className="text-xs text-ink-muted underline hover:text-ink"
-                >
-                  Back
-                </button>
-              </div>
-              <label className="block text-sm">
-                Full name
-                <input
-                  name="guestName"
-                  required
-                  minLength={2}
-                  autoComplete="name"
-                  placeholder="As on your ID"
-                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
-                />
-              </label>
-              <label className="block text-sm">
-                Email
-                <input
-                  name="guestEmail"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="For receipt & booking details"
-                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
-                />
-              </label>
-              <label className="block text-sm">
-                Phone
-                <input
-                  name="guestPhone"
-                  type="tel"
-                  autoComplete="tel"
-                  placeholder="07… (optional unless paying by M-Pesa)"
-                  className="mt-1 w-full rounded-md border border-line px-3 py-2"
-                />
-              </label>
-            </div>
-          )}
+          <div className="space-y-3 rounded-md border border-line/80 bg-sand/20 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+              Guest details
+            </p>
+            <p className="text-xs text-ink-muted">
+              These appear on your voucher and for the host — use the name of
+              the person staying.
+            </p>
+            <label className="block text-sm">
+              Full name
+              <input
+                name="guestName"
+                required
+                minLength={2}
+                autoComplete="name"
+                defaultValue={session?.user?.name || ""}
+                placeholder="As on your ID"
+                className="mt-1 w-full rounded-md border border-line px-3 py-2"
+              />
+            </label>
+            <label className="block text-sm">
+              Email
+              <input
+                name="guestEmail"
+                type="email"
+                required
+                autoComplete="email"
+                defaultValue={session?.user?.email || ""}
+                placeholder="For receipt & booking details"
+                className="mt-1 w-full rounded-md border border-line px-3 py-2"
+              />
+            </label>
+            <label className="block text-sm">
+              Phone
+              <input
+                name="guestPhone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="07… (optional unless paying by M-Pesa)"
+                className="mt-1 w-full rounded-md border border-line px-3 py-2"
+              />
+            </label>
+          </div>
 
           {(isStayStyleOffer &&
             (listing.allowOvernight !== false ||
@@ -1059,7 +1220,7 @@ export function ListingDetailClient({
               name="guests"
               type="number"
               min={1}
-              defaultValue={1}
+              defaultValue={guestsDefault}
               className="mt-1 w-full rounded-md border border-line px-3 py-2"
             />
           </label>
@@ -1072,13 +1233,16 @@ export function ListingDetailClient({
               onChange={(e) => setPaymentMethod(e.target.value)}
               className="mt-1 w-full rounded-md border border-line px-3 py-2"
             >
-              {listing.acceptMpesa && <option value="MPESA">M-Pesa</option>}
-              {listing.acceptCard && (
+              {listing.acceptMpesa && payFlags?.mpesaEnabled !== false && (
+                <option value="MPESA">M-Pesa</option>
+              )}
+              {listing.acceptCard && payFlags?.cardEnabled !== false && (
                 <option value="CARD">Card (Visa / Mastercard)</option>
               )}
-              {listing.acceptCashOnArrival && (
-                <option value="CASH_ON_ARRIVAL">Cash on arrival</option>
-              )}
+              {listing.acceptCashOnArrival &&
+                payFlags?.cashEnabled !== false && (
+                  <option value="CASH_ON_ARRIVAL">Cash on arrival</option>
+                )}
             </select>
           </label>
 
@@ -1095,14 +1259,41 @@ export function ListingDetailClient({
             </label>
           )}
 
-          {paymentMethod === "CARD" && listing.acceptCard && (
-            <CardPaymentForm values={card} onChange={setCard} />
+          {paymentMethod === "CARD" &&
+            listing.acceptCard &&
+            payFlags?.cardEnabled !== false && (
+              <div className="space-y-2">
+                <p className="rounded-md border border-line/80 bg-sand/30 px-3 py-2 text-xs text-ink-muted">
+                  {(payFlags?.cardMode || "sandbox") === "manual"
+                    ? "Card held for manual confirmation"
+                    : "Test mode — no real charge"}
+                </p>
+                <CardPaymentForm values={card} onChange={setCard} />
+              </div>
+            )}
+
+          {session?.user && loyaltyPoints > 0 && (
+            <label className="flex items-start gap-2 rounded-md border border-line bg-sand/30 px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useLoyalty}
+                onChange={(e) => setUseLoyalty(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Use loyalty points ({loyaltyPoints.toLocaleString()} pts · KES{" "}
+                {(loyaltyPoints * loyaltyPointValue).toLocaleString()} value).
+                Discount is capped at the booking total.
+              </span>
+            </label>
           )}
 
           <BookingTrustStrip
             supportEmail={trust?.supportEmail}
             supportPhone={trust?.supportPhone}
             cancellationHours={trust?.cancellationHours}
+            checkInTime={trust?.checkInTime}
+            checkOutTime={trust?.checkOutTime}
           />
 
           {mpesaWait && (

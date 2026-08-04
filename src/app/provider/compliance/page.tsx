@@ -91,7 +91,7 @@ export default function CompliancePage() {
       setError(body.error || "Queue failed");
       return;
     }
-    setMsg("Queued for eTIMS");
+    setMsg(body.message || "Queued for eTIMS");
     void load();
   }
 
@@ -232,6 +232,11 @@ export default function CompliancePage() {
               {data.platformEtims
                 ? " · platform module on"
                 : " · platform module off (manual queue still works)"}
+              {data.etimsMode === "sandbox"
+                ? " · sandbox auto-assigns a KRA ref on queue"
+                : data.etimsMode === "live"
+                  ? " · live posts to the configured eTIMS API"
+                  : " · mark submitted when you have the KRA ref"}
             </p>
             <form onSubmit={savePin} className="mt-4 space-y-3">
               <label className="block text-sm font-medium">

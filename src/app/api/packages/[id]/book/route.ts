@@ -8,6 +8,9 @@ import { chargeCardSandbox } from "@/lib/card";
 import { notifyAndEmail } from "@/lib/notify";
 import { getPlatformSettings, boolSetting } from "@/lib/settings";
 import { validateKenyanPhone } from "@/lib/identity";
+import { isDarajaConfigured, stkPush } from "@/lib/mpesa";
+import { normalizePhone } from "@/lib/sms";
+import { failMpesaPackageBooking } from "@/lib/payments";
 import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
@@ -33,8 +36,7 @@ const bookSchema = z.object({
 
 /**
  * Book a published travel package (guest or member).
- * Payments: cash reserve, card sandbox, or M-Pesa phone capture (manual confirm
- * when Daraja isn't wired for package ledger).
+ * M-Pesa sends an STK push; booking confirms only after Safaricom success.
  */
 export async function POST(request: Request, { params }: Params) {
   try {
@@ -50,28 +52,26 @@ export async function POST(request: Request, { params }: Params) {
       .maybeSingle();
     if (!pkg) return jsonError("Package not found", 404);
 
-    let guestName: string | null = null;
-    let guestEmail: string | null = null;
-    let guestPhone: string | null = null;
-    let travelerId: string | null = null;
+    let travelerId: string | null = session?.user?.id ?? null;
 
-    if (!session?.user) {
-      if (!body.guestName?.trim() || !body.guestEmail?.trim()) {
-        return jsonError("Name and email are required for guest checkout", 400);
-      }
-      guestName = body.guestName.trim();
-      guestEmail = body.guestEmail.trim().toLowerCase();
-      guestPhone = body.guestPhone?.trim() || null;
-      if (guestPhone) {
-        const phoneCheck = validateKenyanPhone(guestPhone, { required: true });
-        if (phoneCheck.error) return jsonError(phoneCheck.error, 400);
-        guestPhone = phoneCheck.phone;
-      }
-    } else {
-      travelerId = session.user.id;
-      guestName = session.user.name || body.guestName || "Guest";
-      guestEmail = session.user.email || body.guestEmail || null;
-      guestPhone = body.guestPhone?.trim() || null;
+    // Prefer checkout-form details; fall back to member profile if blank.
+    const guestName =
+      body.guestName?.trim() ||
+      session?.user?.name?.trim() ||
+      null;
+    const guestEmailRaw =
+      body.guestEmail?.trim() || session?.user?.email?.trim() || null;
+    const guestEmail = guestEmailRaw ? guestEmailRaw.toLowerCase() : null;
+
+    if (!guestName || !guestEmail) {
+      return jsonError("Name and email are required to complete booking", 400);
+    }
+
+    let guestPhone: string | null = body.guestPhone?.trim() || null;
+    if (guestPhone) {
+      const phoneCheck = validateKenyanPhone(guestPhone, { required: true });
+      if (phoneCheck.error) return jsonError(phoneCheck.error, 400);
+      guestPhone = phoneCheck.phone;
     }
 
     const settings = await getPlatformSettings();
@@ -94,6 +94,7 @@ export async function POST(request: Request, { params }: Params) {
     const accessToken = bookingAccessToken();
     const startDay = body.startDate.slice(0, 10);
     const startDate = `${startDay}T12:00:00.000Z`;
+    const confirmHref = `/packages/bookings/${bookingId}?t=${accessToken}&confirmed=1`;
 
     let paymentStatus: string = "PENDING";
     let status: string = "PENDING";
@@ -101,6 +102,8 @@ export async function POST(request: Request, { params }: Params) {
     let paidAt: string | null = null;
     let receiptNumber: string | null = null;
     let paymentMessage = "";
+    let pendingMpesa = false;
+    let checkoutRequestId: string | undefined;
 
     if (body.paymentMethod === "CASH_ON_ARRIVAL") {
       paymentStatus = "NOT_REQUIRED";
@@ -108,26 +111,34 @@ export async function POST(request: Request, { params }: Params) {
       paymentMessage = "Package reserved — pay on arrival / with your host";
     } else if (body.paymentMethod === "CARD") {
       if (!body.card) return jsonError("Card details required", 400);
-      const charged = chargeCardSandbox(body.card, {
-        amount: money.total,
-        reference,
-      });
-      if (!charged.ok) return jsonError(charged.error || "Card failed", 402);
-      paymentStatus = "PAID";
-      status = "CONFIRMED";
-      amountPaid = money.total;
-      paidAt = new Date().toISOString();
-      receiptNumber = makeReceiptNumber();
-      paymentMessage = "Card payment received";
+      const cardMode = String(settings["payments.cardMode"] || "sandbox");
+      if (cardMode === "manual") {
+        paymentStatus = "PENDING";
+        status = "PENDING";
+        paymentMessage =
+          "Card details received. An admin will confirm payment shortly — package is not confirmed yet.";
+      } else {
+        const charged = chargeCardSandbox(body.card, {
+          amount: money.total,
+          reference,
+        });
+        if (!charged.ok) return jsonError(charged.error || "Card failed", 402);
+        paymentStatus = "PAID";
+        status = "CONFIRMED";
+        amountPaid = money.total;
+        paidAt = new Date().toISOString();
+        receiptNumber = makeReceiptNumber();
+        paymentMessage = "Card payment received";
+      }
     } else {
-      const phone = body.phone || guestPhone;
-      if (!phone) return jsonError("M-Pesa phone number required", 400);
-      const phoneCheck = validateKenyanPhone(phone, { required: true });
+      const rawPhone = body.phone || guestPhone;
+      if (!rawPhone) return jsonError("M-Pesa phone number required", 400);
+      const phoneCheck = validateKenyanPhone(rawPhone, { required: true });
       if (phoneCheck.error) return jsonError(phoneCheck.error, 400);
       paymentStatus = "PENDING";
-      status = "RESERVED";
+      status = "PENDING";
       paymentMessage =
-        "Package held. Complete M-Pesa payment when prompted, or pay via the confirmation link instructions.";
+        "An M-Pesa prompt was sent to your phone. Enter your PIN to pay. Your package confirms only after payment succeeds.";
     }
 
     const { data: row, error } = await db
@@ -169,8 +180,119 @@ export async function POST(request: Request, { params }: Params) {
       throw error;
     }
 
-    const confirmHref = `/packages/bookings/${bookingId}?t=${accessToken}&confirmed=1`;
-    if (guestEmail) {
+    if (body.paymentMethod === "CARD" && paymentStatus === "PENDING") {
+      await db.from("Payment").insert({
+        id: createId(),
+        bookingId: null,
+        packageBookingId: bookingId,
+        method: "CARD",
+        status: "PENDING",
+        amount: money.total,
+        providerRef: `CARD-MANUAL-${reference}`,
+        note: "Awaiting manual card confirmation",
+      });
+    }
+
+    if (body.paymentMethod === "CARD" && paymentStatus === "PAID") {
+      await db.from("Payment").insert({
+        id: createId(),
+        bookingId: null,
+        packageBookingId: bookingId,
+        method: "CARD",
+        status: "PAID",
+        amount: money.total,
+        amountReceived: money.total,
+        providerRef: `CARD-${reference}`,
+        receiptNumber,
+      });
+    }
+
+    if (body.paymentMethod === "MPESA") {
+      if (!(await isDarajaConfigured())) {
+        await failMpesaPackageBooking(
+          bookingId,
+          "M-Pesa is not configured on the platform",
+        );
+        return jsonError(
+          "M-Pesa is not set up yet. Ask the platform admin to add Daraja credentials under Settings → M-Pesa.",
+          503,
+        );
+      }
+
+      const phone = normalizePhone(body.phone || guestPhone || "");
+      if (!phone) {
+        await failMpesaPackageBooking(bookingId, "Invalid M-Pesa phone");
+        return jsonError(
+          "Enter a valid Safaricom M-Pesa number (07… or 2547…). Booking was not confirmed.",
+          400,
+        );
+      }
+
+      await db.from("Payment").insert({
+        id: createId(),
+        bookingId: null,
+        packageBookingId: bookingId,
+        method: "MPESA",
+        status: "PENDING",
+        amount: money.total,
+        providerRef: null,
+        note: null,
+      });
+
+      const stk = await stkPush({
+        phone,
+        amount: money.total,
+        reference,
+        description: `Package ${reference}`,
+      });
+
+      if (!stk.ok) {
+        const failed = await failMpesaPackageBooking(
+          bookingId,
+          stk.error || "STK push failed",
+        );
+        return jsonError(
+          failed.message || stk.error || "M-Pesa request failed",
+          402,
+        );
+      }
+
+      checkoutRequestId = stk.checkoutRequestId;
+      pendingMpesa = true;
+
+      if (stk.checkoutRequestId) {
+        await db
+          .from("Payment")
+          .update({
+            providerRef: stk.checkoutRequestId,
+            updatedAt: new Date().toISOString(),
+          })
+          .eq("packageBookingId", bookingId);
+
+        {
+          const { error: checkoutColErr } = await db
+            .from("PackageBooking")
+            .update({
+              mpesaCheckoutId: stk.checkoutRequestId,
+              updatedAt: new Date().toISOString(),
+            })
+            .eq("id", bookingId);
+          // Ignore if mpesaCheckoutId column is missing (pre-migration)
+          if (checkoutColErr) {
+            console.warn(
+              "PackageBooking.mpesaCheckoutId update skipped",
+              checkoutColErr.message,
+            );
+          }
+        }
+      }
+
+      paymentMessage =
+        "An M-Pesa prompt was sent to your phone. Enter your PIN to pay. Your package confirms only after payment succeeds.";
+    }
+
+    // Notify immediately for cash / confirmed card; M-Pesa waits for callback
+    if (guestEmail && !pendingMpesa) {
       await notifyAndEmail({
         userId: travelerId,
         email: guestEmail,
@@ -185,7 +307,14 @@ export async function POST(request: Request, { params }: Params) {
     return jsonOk(
       {
         booking: row,
-        payment: { message: paymentMessage, paymentStatus, status },
+        payment: {
+          message: paymentMessage,
+          paymentStatus: pendingMpesa ? "PENDING" : paymentStatus,
+          status: pendingMpesa ? "PENDING" : status,
+          pendingMpesa: pendingMpesa || undefined,
+        },
+        pendingMpesa: pendingMpesa || undefined,
+        checkoutRequestId,
         accessToken,
         confirmationUrl: confirmHref,
         guestCheckout: !session?.user,

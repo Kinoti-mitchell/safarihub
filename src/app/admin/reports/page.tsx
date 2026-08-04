@@ -15,6 +15,19 @@ type Report = {
     countiesLive: number;
     countiesTotal: number;
   };
+  ops?: {
+    conversionRate: number;
+    mpesaSuccessRate: number;
+    mpesaPaid: number;
+    mpesaFailed: number;
+    refundedBookings: number;
+    refundVolume: number;
+    noShows: number;
+    openDisputes: number;
+    payoutOnHold: number;
+    etimsQueued: number;
+    etimsFailed: number;
+  };
   monthly: { label: string; bookings: number; revenue: number }[];
   bookingsByStatus: { status: string; count: number }[];
   paymentsByStatus: { status: string; count: number; amount: number }[];
@@ -82,6 +95,7 @@ export default function AdminReportsPage() {
   }
 
   const t = data.totals;
+  const ops = data.ops;
   const maxMonthly = Math.max(1, ...data.monthly.map((m) => m.bookings));
   const maxRevenue = Math.max(1, ...data.monthly.map((m) => m.revenue));
 
@@ -91,9 +105,22 @@ export default function AdminReportsPage() {
         <h1 className="font-display text-3xl font-semibold text-lake">Insights</h1>
         <p className="mt-1 text-sm text-ink-muted">
           Aggregated hospitality demand for operators, counties and partners —
-          bookings, revenue, listings and markets.
+          bookings, revenue, listings, payments health and markets.
         </p>
       </div>
+
+      {ops && (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Kpi label="Pay conversion" value={`${ops.conversionRate}%`} />
+          <Kpi label="M-Pesa success" value={`${ops.mpesaSuccessRate}%`} />
+          <Kpi label="Refund volume" value={money(ops.refundVolume)} />
+          <Kpi label="Payouts on hold" value={money(ops.payoutOnHold)} />
+          <Kpi label="Open disputes" value={String(ops.openDisputes)} />
+          <Kpi label="No-shows" value={String(ops.noShows)} />
+          <Kpi label="eTIMS queued" value={String(ops.etimsQueued)} />
+          <Kpi label="eTIMS failed" value={String(ops.etimsFailed)} />
+        </div>
+      )}
 
       {/* KPI row */}
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

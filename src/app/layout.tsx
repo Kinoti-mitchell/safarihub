@@ -1,9 +1,14 @@
+import type { CSSProperties } from "react";
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Fraunces, Outfit } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteChrome } from "@/components/site-chrome";
+import { MaintenanceGate } from "@/components/maintenance-gate";
+import { ReauthBanner } from "@/components/reauth-banner";
+import { brandFromSettings } from "@/lib/branding";
 import { getPlatformSettings } from "@/lib/settings";
 import "./globals.css";
 
@@ -52,21 +57,32 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const brand = await brandFromSettings();
+  const h = await headers();
+  const pathname = h.get("x-pathname") || "/";
+
   return (
     <html
       lang="en"
       data-scroll-behavior="smooth"
       className={`${display.variable} ${sans.variable} h-full`}
+      style={
+        {
+          "--sun": brand.accentColor,
+          "--role-brand-mark": brand.accentColor,
+        } as CSSProperties
+      }
     >
       <body className="min-h-full flex flex-col font-sans text-ink antialiased">
         <Providers>
+          <ReauthBanner />
           <SiteChrome header={<SiteHeader />} footer={<SiteFooter />}>
-            {children}
+            <MaintenanceGate pathname={pathname}>{children}</MaintenanceGate>
           </SiteChrome>
         </Providers>
       </body>

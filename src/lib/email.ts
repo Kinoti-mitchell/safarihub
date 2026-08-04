@@ -159,6 +159,7 @@ export async function sendEmail(msg: EmailMessage): Promise<boolean> {
     const provider = str(settings, "email.provider") || "smtp";
     const fromEmail =
       str(settings, "email.fromEmail") ||
+      str(settings, "notifications.fromEmail") ||
       process.env.GMAIL_USER?.trim() ||
       "no-reply@safarihub.co.ke";
     const fromName = str(settings, "email.fromName") || "Safari Hub";

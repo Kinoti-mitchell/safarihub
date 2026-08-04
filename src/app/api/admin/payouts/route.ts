@@ -2,7 +2,7 @@ import { db } from "@/lib/supabase";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/http";
 import { requireAdminPermission } from "@/lib/session";
 
-const STATUSES = ["PENDING", "PROCESSING", "PAID", "FAILED"];
+const STATUSES = ["PENDING", "PROCESSING", "ON_HOLD", "PAID", "FAILED"];
 
 export async function GET(request: Request) {
   try {

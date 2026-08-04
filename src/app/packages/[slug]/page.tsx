@@ -59,6 +59,44 @@ export default async function PackageDetailPage({ params }: Props) {
               {pkg.description as string}
             </p>
           ) : null}
+          {Boolean(pkg.meetingPoint || pkg.capacity) && (
+            <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+              {typeof pkg.meetingPoint === "string" && pkg.meetingPoint ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-ink-muted">Meeting point</dt>
+                  <dd className="font-medium text-ink">{pkg.meetingPoint}</dd>
+                </div>
+              ) : null}
+              {typeof pkg.capacity === "number" && pkg.capacity > 0 ? (
+                <div>
+                  <dt className="text-ink-muted">Capacity</dt>
+                  <dd className="font-medium text-ink">{pkg.capacity} seats</dd>
+                </div>
+              ) : null}
+            </dl>
+          )}
+          {Array.isArray(pkg.inclusions) &&
+            (pkg.inclusions as unknown[]).length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-ink">Included</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">
+                {(pkg.inclusions as string[]).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {Array.isArray(pkg.exclusions) &&
+            (pkg.exclusions as unknown[]).length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-ink">Not included</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">
+                {(pkg.exclusions as string[]).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ul className="mt-6 space-y-3 text-sm text-ink">
             {(
               (pkg.items as Array<{

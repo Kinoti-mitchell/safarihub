@@ -62,7 +62,22 @@ function isGroup(item: NavItem): item is NavGroup {
   return "children" in item;
 }
 
-function buildItems(badges?: ProviderNavBadges): NavItem[] {
+function isTourOps(businessType?: string | null): boolean {
+  return (
+    businessType === "TOUR_OPERATOR" ||
+    businessType === "TRANSFER" ||
+    businessType === "CAMP"
+  );
+}
+
+function buildItems(
+  badges?: ProviderNavBadges,
+  businessType?: string | null,
+  flags?: { suppliersEnabled?: boolean; staffingEnabled?: boolean },
+): NavItem[] {
+  const tour = isTourOps(businessType);
+  const suppliersEnabled = flags?.suppliersEnabled !== false;
+  const staffingEnabled = flags?.staffingEnabled !== false;
   return [
     {
       href: "/provider",
@@ -72,21 +87,21 @@ function buildItems(badges?: ProviderNavBadges): NavItem[] {
       icon: overviewIcon,
     },
     {
-      label: "Front desk",
+      label: tour ? "Operations" : "Front desk",
       icon: todayIcon,
       defaultOpen: true,
       children: [
         {
           href: "/provider/bookings",
           label: "Bookings",
-          desc: "Confirm & collect",
+          desc: tour ? "Departures & guests" : "Confirm & collect",
           icon: leafIcon,
           badge: badges?.bookings,
         },
         {
           href: "/provider/inbox",
           label: "Inbox",
-          desc: "Guest messages",
+          desc: tour ? "Messages & leads" : "Guest messages",
           icon: leafIcon,
           badge: badges?.inbox,
         },
@@ -104,32 +119,46 @@ function buildItems(badges?: ProviderNavBadges): NavItem[] {
       children: [
         {
           href: "/provider/listings",
-          label: "Listings",
-          desc: "Storefront",
+          label: tour ? "Tours & activities" : "Listings",
+          desc: tour ? "Day trips & experiences" : "Storefront",
+          icon: leafIcon,
+        },
+        {
+          href: "/provider/packages",
+          label: "Packages",
+          desc: "Multi-day itineraries",
           icon: leafIcon,
         },
       ],
     },
     {
-      label: "Run the house",
+      label: tour ? "Run operations" : "Run the house",
       icon: opsIcon,
       children: [
-        {
-          href: "/provider/staff",
-          label: "Staff",
-          desc: "Register & assign",
-          icon: leafIcon,
-        },
-        {
-          href: "/provider/suppliers",
-          label: "Suppliers",
-          desc: "Register & order",
-          icon: leafIcon,
-        },
+        ...(staffingEnabled
+          ? [
+              {
+                href: "/provider/staff",
+                label: "Staff",
+                desc: tour ? "Guides & desk" : "Register & assign",
+                icon: leafIcon,
+              } satisfies NavLeaf,
+            ]
+          : []),
+        ...(suppliersEnabled
+          ? [
+              {
+                href: "/provider/suppliers",
+                label: "Suppliers",
+                desc: "Register & order",
+                icon: leafIcon,
+              } satisfies NavLeaf,
+            ]
+          : []),
         {
           href: "/provider/inventory",
-          label: "Inventory",
-          desc: "Stock on hand",
+          label: tour ? "Gear & stock" : "Inventory",
+          desc: tour ? "Kit on hand" : "Stock on hand",
           icon: leafIcon,
         },
         {
@@ -147,13 +176,13 @@ function buildItems(badges?: ProviderNavBadges): NavItem[] {
         {
           href: "/provider/payouts",
           label: "Payouts",
-          desc: "M-Pesa settlements",
+          desc: "Settlements & next pay",
           icon: leafIcon,
         },
         {
           href: "/provider/analytics",
           label: "Insights",
-          desc: "Revenue snapshot",
+          desc: tour ? "Departures snapshot" : "Revenue snapshot",
           icon: leafIcon,
         },
       ],
@@ -205,17 +234,27 @@ export function ProviderSidebar({
   brand,
   badges,
   membershipRole = "OWNER",
+  businessType = null,
+  suppliersEnabled = true,
+  staffingEnabled = true,
 }: {
   user: { name?: string | null; email?: string | null };
   brand?: { logoUrl?: string; logoText?: string; name?: string };
   badges?: ProviderNavBadges;
   membershipRole?: string | StaffRole;
+  businessType?: string | null;
+  suppliersEnabled?: boolean;
+  staffingEnabled?: boolean;
 }) {
-  const items = filterItemsForRole(buildItems(badges), membershipRole);
+  const items = filterItemsForRole(
+    buildItems(badges, businessType, { suppliersEnabled, staffingEnabled }),
+    membershipRole,
+  );
+  const eyebrow = isTourOps(businessType) ? "Safari desk" : "Lodge desk";
 
   return (
     <DashboardNav
-      eyebrow="Lodge desk"
+      eyebrow={eyebrow}
       items={items}
       user={user}
       brand={brand}
